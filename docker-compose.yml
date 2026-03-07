@@ -1,0 +1,130 @@
+version: "3.9"
+
+# ─── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  backend:
+    driver: bridge
+
+# ─── Services ─────────────────────────────────────────────────────────────────
+services:
+
+  # C++ Central Engine — gRPC :50051
+  # Owner: Samad
+  engine:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile  # TODO: create engine/Dockerfile (C++/CMake build)
+    environment:
+      ENGINE_GRPC_ADDRESS: "0.0.0.0:50051"
+    expose:
+      - "50051"
+    networks:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Polymarket polling agent
+  # Owner: Saify
+  polymarket-agent:
+    build:
+      context: .
+      dockerfile: agents/Dockerfile  # TODO: create agents/Dockerfile
+    command: ["python", "-m", "agents.polymarket.agent"]
+    environment:
+      ENGINE_GRPC_ADDRESS: "engine:50051"
+      POLYMARKET_POLL_INTERVAL_S: "5"
+      POLYMARKET_DELTA_THRESHOLD: "0.01"
+    env_file:
+      - .env
+    networks:
+      - backend
+    depends_on:
+      engine:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # MMA polling agent
+  # Owner: Saify
+  mma-agent:
+    build:
+      context: .
+      dockerfile: agents/Dockerfile
+    command: ["python", "-m", "agents.mma.agent"]
+    environment:
+      ENGINE_GRPC_ADDRESS: "engine:50051"
+      MMA_POLL_INTERVAL_S: "30"
+    env_file:
+      - .env
+    networks:
+      - backend
+    depends_on:
+      engine:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # RAG Orchestrator — gRPC :50052
+  # Owner: FWS
+  rag:
+    build:
+      context: .
+      dockerfile: rag/Dockerfile  # TODO: create rag/Dockerfile
+    command: ["python", "-m", "rag.orchestrator"]
+    environment:
+      ENGINE_GRPC_ADDRESS: "engine:50051"
+      RAG_GRPC_ADDRESS: "0.0.0.0:50052"
+    env_file:
+      - .env
+    expose:
+      - "50052"
+    networks:
+      - backend
+    depends_on:
+      engine:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # WebSocket Gateway — HTTP/WS :8000
+  # Owner: Samad
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile  # TODO: create gateway/Dockerfile
+    command: ["uvicorn", "gateway.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      ENGINE_GRPC_ADDRESS: "engine:50051"
+      RAG_GRPC_ADDRESS: "rag:50052"
+    ports:
+      - "8000:8000"
+    networks:
+      - backend
+    depends_on:
+      engine:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # React Dashboard — dev server :5173
+  # Owner: Zaid
+  # In production replace with: build dashboard and serve via nginx.
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile.dev  # TODO: create dashboard/Dockerfile.dev (node:20 + vite)
+    environment:
+      VITE_GATEWAY_WS_URL: "ws://localhost:8000/ws"
+    ports:
+      - "5173:5173"
+    networks:
+      - backend
+    volumes:
+      - ./dashboard:/app
+      - /app/node_modules  # anonymous volume to prevent host override
+    restart: unless-stopped

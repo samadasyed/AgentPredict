@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package agentpredict;
+
+option go_package = "github.com/agentpredict/proto;agentpredict";
+
+// ─── Primitive event types ───────────────────────────────────────────────────
+
+message MarketEvent {
+  string market_id = 1;      // Polymarket market/outcome ID
+  string outcome   = 2;      // e.g. "Fighter A wins"
+  double probability = 3;    // current implied probability [0, 1]
+  double delta     = 4;      // change since last reading (signed)
+  int64  timestamp = 5;      // unix millis from source
+}
+
+// NOTE: FightStatEvent fields are fully defined so C++ compiles clean.
+// Data population is STUBBED until BallDontLie GOAT tier is enabled.
+message FightStatEvent {
+  string fight_id     = 1;   // BallDontLie fight identifier
+  string fighter_name = 2;
+  string stat_type    = 3;   // e.g. "significant_strikes", "takedowns"
+  double value        = 4;   // numeric stat reading
+  int32  round        = 5;   // fight round (0 = between rounds)
+  int64  timestamp    = 6;   // unix millis from source
+}
+
+// ─── Canonical wrapper ────────────────────────────────────────────────────────
+
+enum EventSource {
+  SOURCE_UNKNOWN = 0;
+  SOURCE_POLYMARKET = 1;
+  SOURCE_MMA = 2;
+}
+
+message CanonicalEvent {
+  string      event_id    = 1;   // UUID assigned by Normalizer
+  EventSource source      = 2;
+  int64       ingested_at = 3;   // unix millis set by C++ engine
+
+  oneof payload {
+    MarketEvent   market_event = 4;
+    FightStatEvent fight_event = 5;
+  }
+}
+
+// ─── RAG output ───────────────────────────────────────────────────────────────
+
+message EvidenceItem {
+  string text       = 1;   // retrieved passage text
+  string source_ref = 2;   // namespace + vector ID
+  double score      = 3;   // Pinecone similarity score
+}
+
+message RagPrediction {
+  string explanation      = 1;   // 2–3 sentence plain-text explanation
+  repeated EvidenceItem evidence = 2;
+  double confidence       = 3;   // [0, 1] from inference verifier
+  int64  timestamp        = 4;   // unix millis when emitted
+  string trigger_event_id = 5;   // event_id of the canonical event that triggered this
+}
+
+// ─── gRPC Services ────────────────────────────────────────────────────────────
+
+// EventIngestion: Python agents → C++ engine
+// C++ server implements; Python agents are clients.
+service EventIngestion {
+  // Ingest a single canonical event (fire-and-forget with ACK).
+  rpc IngestEvent(CanonicalEvent) returns (IngestAck);
+
+  // Ingest a client-side stream of events in one connection.
+  rpc IngestStream(stream CanonicalEvent) returns (IngestAck);
+}
+
+message IngestAck {
+  string event_id = 1;   // echoed back from CanonicalEvent
+  bool   accepted = 2;   // false if validation rejected
+  string reason   = 3;   // human-readable rejection reason if !accepted
+}
+
+// EventStream: gateway → C++ engine
+// C++ server implements; gateway is client.
+service EventStream {
+  // Subscribe to the live ring-buffer stream of canonical events.
+  // Server streams events as they arrive.
+  rpc Subscribe(SubscribeRequest) returns (stream CanonicalEvent);
+}
+
+message SubscribeRequest {
+  // If non-empty, resume from this cursor (ring-buffer position).
+  // Leave empty to start from the latest event.
+  string cursor = 1;
+
+  // Optional source filter; SOURCE_UNKNOWN means "all sources".
+  EventSource source_filter = 2;
+}
+
+// RagStream: gateway → Python RAG orchestrator
+// Python RAG server implements; gateway is client.
+service RagStream {
+  // Subscribe to the live stream of RAG predictions.
+  rpc SubscribePredictions(RagSubscribeRequest) returns (stream RagPrediction);
+}
+
+message RagSubscribeRequest {
+  // Minimum confidence threshold — server filters below this value.
+  // Set to 0.0 to receive all predictions (including low-confidence).
+  double min_confidence = 1;
+}
