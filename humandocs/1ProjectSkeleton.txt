@@ -1,0 +1,246 @@
+AgentPredict — Project Skeleton Plan                                                                                                       
+                                                                                                                                            
+ Context                                                                                                                                    
+                                                                                                                                            
+ Greenfield project. No code exists yet. Goal is to lay down the full skeleton so all 4 developers can work in parallel. Every file will    
+ have clear ownership, typed interfaces, and TODO markers — but no unimplemented logic left silently empty.                                 
+
+ ---
+ Directory Structure
+
+ /home/agentpredict/
+ ├── proto/
+ │   └── events.proto                  # gRPC contracts (single source of truth)
+ ├── engine/                           # C++ Central Engine — Samad
+ │   ├── CMakeLists.txt
+ │   ├── src/
+ │   │   ├── main.cpp
+ │   │   ├── engine.hpp / engine.cpp
+ │   │   ├── event_store.hpp / event_store.cpp
+ │   │   ├── normalizer.hpp / normalizer.cpp
+ │   │   └── grpc_server.hpp / grpc_server.cpp
+ │   └── tests/unit/
+ │       ├── test_normalizer.cpp
+ │       ├── test_event_store.cpp
+ │       └── CMakeLists.txt
+ ├── agents/                           # Python API agents — Saify + Samad
+ │   ├── shared/
+ │   │   ├── event_emitter.py          # gRPC client → engine
+ │   │   └── retry.py
+ │   ├── polymarket/
+ │   │   ├── models.py                 # Pydantic shapes from Polymarket API
+ │   │   ├── client.py                 # async HTTP client
+ │   │   └── agent.py                  # polling loop
+ │   ├── mma/
+ │   │   ├── models.py
+ │   │   ├── client.py                 # GOAT-tier stats STUBBED
+ │   │   └── agent.py
+ │   └── tests/
+ │       ├── unit/test_polymarket_agent.py
+ │       ├── unit/test_mma_agent.py
+ │       ├── api/test_polymarket_api.py
+ │       └── api/test_mma_api.py
+ ├── rag/                              # RAG Orchestrator — FWS
+ │   ├── orchestrator.py               # agentic loop + gRPC RagStream server
+ │   ├── retriever.py                  # Pinecone
+ │   ├── inference.py                  # Gemini Flash (google-generativeai)
+ │   ├── verifier.py                   # confidence check
+ │   ├── context_builder.py            # sliding window of recent events
+ │   └── tests/
+ │       ├── unit/test_orchestrator.py
+ │       ├── unit/test_retriever.py
+ │       ├── unit/test_inference.py
+ │       ├── api/test_pinecone_api.py
+ │       └── api/test_gemini_api.py
+ ├── gateway/                          # WebSocket bridge — Samad
+ │   ├── server.py                     # FastAPI + /ws endpoint + /health
+ │   ├── engine_subscriber.py          # gRPC client → engine EventStream
+ │   ├── rag_subscriber.py             # gRPC client → RAG RagStream
+ │   ├── broadcaster.py                # fan-out to all browser WS clients
+ │   └── tests/unit/test_broadcaster.py
+ ├── dashboard/                        # React frontend — Zaid
+ │   ├── index.html
+ │   ├── package.json
+ │   ├── tsconfig.json
+ │   ├── vite.config.ts
+ │   ├── tailwind.config.ts
+ │   ├── postcss.config.js
+ │   └── src/
+ │       ├── main.tsx
+ │       ├── App.tsx
+ │       ├── types/
+ │       │   ├── events.ts             # TS mirrors of proto shapes
+ │       │   └── rag.ts
+ │       ├── hooks/
+ │       │   └── useEventStream.ts     # WS lifecycle + message routing
+ │       ├── components/
+ │       │   ├── layout/Header.tsx
+ │       │   ├── layout/TwoColumnLayout.tsx
+ │       │   ├── events/EventFeed.tsx
+ │       │   ├── events/EventCard.tsx
+ │       │   ├── events/SourceBadge.tsx
+ │       │   ├── predictions/PredictionFeed.tsx
+ │       │   ├── predictions/PredictionCard.tsx
+ │       │   ├── predictions/EvidenceList.tsx
+ │       │   └── shared/StreamWarning.tsx
+ │       └── tests/
+ │           ├── hooks/useEventStream.test.ts
+ │           ├── components/EventCard.test.tsx
+ │           └── components/PredictionCard.test.tsx
+ ├── docker-compose.yml                # Samad
+ ├── .env.example
+ └── requirements.txt                  # pinned Python deps
+
+ ---
+ Proto Definitions (proto/events.proto)
+
+ Key messages:
+ - MarketEvent — market_id, outcome, probability [0–1], delta, timestamp
+ - FightStatEvent — fight_id, fighter_name, stat_type, value, round, timestamp  (all fields defined even though data is stubbed — C++
+ compiles clean)
+ - CanonicalEvent — event_id (UUID), source enum, ingested_at, oneof {market_event, fight_event}
+ - RagPrediction — explanation, evidence[], confidence, timestamp, trigger_event_id
+ - EvidenceItem — text, source_ref, score
+
+ gRPC services:
+ - EventIngestion (C++ server, Python agents call it) — IngestEvent + IngestStream
+ - EventStream (C++ server, gateway calls it) — Subscribe → server-streaming
+ - RagStream (Python RAG server, gateway calls it) — SubscribePredictions → server-streaming
+
+ ---
+ C++ Engine — Key Design Points
+
+ - EventStore: Fixed-capacity ring buffer, std::shared_mutex for thread safety, cursor-based subscribers so readers never block writers.
+ TODO: evaluate boost::lockfree if profiling shows contention.
+ - Normalizer: Stateless — validates timestamp within ±60s, probability in [0,1], non-empty IDs. Assigns UUID event_id and ingested_at.
+ Thread-safe without locks.
+ - GrpcServer: Two service impls sharing EventStore and Normalizer via shared_ptr. EventStreamServiceImpl::Subscribe loops on GetSince,
+ uses condition_variable to avoid busy-wait.
+ - CMakeLists.txt: C++20, finds gRPC + Protobuf + nlohmann_json + GTest. Compiles proto files, builds engine_lib shared between main
+ executable and tests.
+
+ Unit tests (GTest):
+ - test_normalizer.cpp — valid/invalid inputs, UUID assignment, timestamp checks
+ - test_event_store.cpp — append, cursor, ring overflow, concurrent reads under TSan
+
+ ---
+ Python Agents — Key Design Points
+
+ Shared:
+ - event_emitter.py — single gRPC channel, reused across calls, exponential backoff on failure
+ - retry.py — decorator with backoff + jitter; distinguishes retryable vs non-retryable errors
+
+ Polymarket (Saify):
+ - client.py — async aiohttp, caches market IDs (refresh every 5 min), respects 429 headers, saves raw JSON for debugging
+ - agent.py — poll loop every 5s, delta threshold 0.01, emits on meaningful change
+ - API tests: market list non-empty, prices in [0,1], rate limit respected
+
+ MMA (Saify):
+ - client.py — free-tier: get_live_events() active. GOAT-tier methods (get_fight_stats, get_round_stats) raise
+ NotImplementedError("BallDontLie GOAT tier required") with clear comment
+ - agent.py — discovers live fights, emits FIGHT_DISCOVERED synthetic events; logs that stats polling is disabled
+ - API tests: live events list, GOAT-tier raises NotImplementedError
+
+ ---
+ RAG Orchestrator — Key Design Points (FWS)
+
+ - orchestrator.py — subscribes to engine EventStream, decides if event is "meaningful", routes to context_builder → retriever → inference
+ → verifier → emit RagPrediction. Also implements RagStream gRPC server for gateway to subscribe.
+ - retriever.py — Pinecone with two namespaces: market_events + fight_events. Embedding via Gemini text-embedding-004. upsert() on every
+ meaningful event (builds store over time for future historical queries). retrieve() returns EvidenceItem[].
+ - inference.py — google-generativeai SDK, model gemini-1.5-flash. Prompt: system sets analyst role, user provides event + context +
+ evidence + asks for 2-3 sentence explanation + confidence float. Parses confidence from last line.
+ - verifier.py — if confidence < 0.5 → neutral message. Basic string containment check that explanation references real
+ market_id/fighter_name from triggering event.
+ - context_builder.py — deque sliding window of last N events per source; serializes to compact text lines for prompt injection.
+
+ ---
+ Gateway — Key Design Points (Samad)
+
+ - server.py — FastAPI, /ws WebSocket endpoint, /health HTTP. On startup (lifespan): starts EngineSubscriber and RagSubscriber as async
+ tasks. WS messages are JSON envelopes: {"type": "event", "data": {...}} or {"type": "prediction", "data": {...}}.
+ - broadcaster.py — asyncio.Lock-protected set of WebSocket clients. Fan-out with silent removal on send failure. TODO: buffer last 50
+ events for late-joining clients.
+ - engine_subscriber.py — gRPC client to engine EventStream.Subscribe, converts proto → dict via MessageToDict, pushes to broadcaster with
+ type="event".
+ - rag_subscriber.py — gRPC client to RAG RagStream.SubscribePredictions, pushes with type="prediction".
+
+ ---
+ Frontend — Key Design Points (Zaid)
+
+ Stack: React 18 + Vite + TypeScript + Tailwind CSS
+
+ - useEventStream.ts — manages WS lifecycle, splits messages by type into events[] and predictions[] state, reconnects after 3s on drop,
+ trims arrays to max 200/50.
+ - Two-column layout: left = EventFeed (Stream 1, factual only), right = PredictionFeed (Stream 2, always shows evidence).
+ - EventCard — shows source badge (blue "PM" / orange "MMA"), timestamp, event content. No predictive language.
+ - SourceBadge — color-coded pill distinguishing PM vs MMA visually.
+ - PredictionCard — explanation + confidence bar (green >0.7, yellow 0.5–0.7) + EvidenceList always visible.
+ - StreamWarning — amber banner shown on connection drop or malformed payload.
+
+ ---
+ Docker Compose Services
+
+ ┌──────────────────┬───────────────────────────┬────────────────────────┬───────┐
+ │     Service      │           Image           │          Port          │ Owner │
+ ├──────────────────┼───────────────────────────┼────────────────────────┼───────┤
+ │ engine           │ custom C++ build          │ gRPC :50051 (internal) │ Samad │
+ ├──────────────────┼───────────────────────────┼────────────────────────┼───────┤
+ │ polymarket-agent │ Python                    │ —                      │ Saify │
+ ├──────────────────┼───────────────────────────┼────────────────────────┼───────┤
+ │ mma-agent        │ Python                    │ —                      │ Saify │
+ ├──────────────────┼───────────────────────────┼────────────────────────┼───────┤
+ │ rag              │ Python                    │ gRPC :50052 (internal) │ FWS   │
+ ├──────────────────┼───────────────────────────┼────────────────────────┼───────┤
+ │ gateway          │ Python                    │ HTTP/WS :8000          │ Samad │
+ ├──────────────────┼───────────────────────────┼────────────────────────┼───────┤
+ │ dashboard        │ Node (dev) / nginx (prod) │ :5173 / :80            │ Zaid  │
+ └──────────────────┴───────────────────────────┴────────────────────────┴───────┘
+
+ .env.example includes: ENGINE_GRPC_ADDRESS, RAG_GRPC_ADDRESS, GATEWAY_WS_URL, GOOGLE_API_KEY, PINECONE_API_KEY, PINECONE_INDEX_NAME,
+ BALLDONTLIE_API_KEY
+
+ ---
+ Build Order / Dependencies
+
+ 1. proto/ — must exist first; all other components compile/generate from it
+ 2. engine/ — C++ build (CMake); independently testable
+ 3. agents/ — depends on generated Python proto stubs
+ 4. rag/ — depends on generated Python proto stubs + Pinecone + Google AI accounts
+ 5. gateway/ — depends on engine + rag being reachable (or mocked for unit tests)
+ 6. dashboard/ — independent; mocks WS with hardcoded JSON for local dev
+
+ ---
+ Verification
+
+ - C++ engine: cmake --build . && ctest (GTest unit tests + TSan concurrent test)
+ - Python agents: pytest agents/tests/unit/ (fast); pytest -m api agents/tests/api/ (live API)
+ - RAG: pytest rag/tests/unit/ (mocked); pytest -m api rag/tests/api/ (live Pinecone + Gemini)
+ - Gateway: pytest gateway/tests/unit/
+ - Frontend: npm test (Vitest); npm run dev + connect to mock WS server to verify both streams render
+ - Integration: docker compose up → open browser → observe two-column dashboard populating
+
+ ---
+ Team Assignment Summary
+
+ ┌───────────────────────────────────┬───────────────┐
+ │             Component             │   Owner(s)    │
+ ├───────────────────────────────────┼───────────────┤
+ │ proto/events.proto                │ Samad         │
+ ├───────────────────────────────────┼───────────────┤
+ │ engine/                           │ Samad         │
+ ├───────────────────────────────────┼───────────────┤
+ │ agents/shared/                    │ Samad + Saify │
+ ├───────────────────────────────────┼───────────────┤
+ │ agents/polymarket/                │ Saify         │
+ ├───────────────────────────────────┼───────────────┤
+ │ agents/mma/                       │ Saify         │
+ ├───────────────────────────────────┼───────────────┤
+ │ rag/                              │ FWS           │
+ ├───────────────────────────────────┼───────────────┤
+ │ gateway/                          │ Samad         │
+ ├───────────────────────────────────┼───────────────┤
+ │ dashboard/                        │ Zaid          │
+ ├───────────────────────────────────┼───────────────┤
+ │ docker-compose.yml + .env.example │ Samad         │
+ └───────────────────────────────────┴───────────────┘

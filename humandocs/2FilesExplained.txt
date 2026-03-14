@@ -1,0 +1,190 @@
+  New Files by Component                                                                                                                    
+                                                            
+  proto/events.proto                                                                                                                        
+                                                            
+  Single source of truth for all inter-service contracts. Defines the 3 gRPC services and all message types (MarketEvent, FightStatEvent,
+  CanonicalEvent, RagPrediction, EvidenceItem).
+
+  ---
+  engine/ — C++ Central Engine (Samad)
+
+  ┌─────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │              File               │                                            What it does                                            │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ CMakeLists.txt                  │ C++20 build; finds gRPC/Protobuf/nlohmann_json/GTest; compiles proto stubs; builds engine_lib      │
+  │                                 │ shared by main + tests                                                                             │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ src/normalizer.hpp/.cpp         │ Stateless validator — checks probability [0,1], non-empty IDs, timestamp within ±60s, stamps UUID  │
+  │                                 │ + ingested_at                                                                                      │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ src/event_store.hpp/.cpp        │ Fixed ring buffer (power-of-2, default 4096), shared_mutex, cursor-based subscribers,              │
+  │                                 │ condition_variable wait                                                                            │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ src/grpc_server.hpp/.cpp        │ Implements EventIngestion (agents→engine) and EventStream (engine→gateway) services                │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ src/engine.hpp/.cpp             │ Top-level wiring object                                                                            │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ src/main.cpp                    │ Entry point, reads ENGINE_GRPC_ADDRESS from env                                                    │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/unit/test_normalizer.cpp  │ 14 GTest cases (valid/invalid inputs, UUID uniqueness, boundary probs, timestamp skew)             │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/unit/test_event_store.cpp │ 10 GTest cases including ring overflow and a TSan concurrent-readers stress test                   │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/unit/CMakeLists.txt       │ Links tests against engine_lib + GTest                                                             │
+  └─────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  agents/ — Python API Agents (Saify + Samad)
+
+  ┌─────────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │                File                 │                                          What it does                                          │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ shared/retry.py                     │ Async retry decorator with exponential backoff + jitter; distinguishes retryable vs            │
+  │                                     │ non-retryable                                                                                  │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ shared/event_emitter.py             │ Single reused gRPC channel to engine; emit() and emit_stream()                                 │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ polymarket/models.py                │ Pydantic: TokenPrice, Market, MarketsPage, PriceSnapshot                                       │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ polymarket/client.py                │ aiohttp async client; 5-min market cache; respects 429 Retry-After; optional debug JSON dump   │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ polymarket/agent.py                 │ Polls every 5s; emits when abs(delta) >= 0.01                                                  │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ mma/models.py                       │ Pydantic: Fighter, Fight, Event, FightStat, RoundStat                                          │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ mma/client.py                       │ Free tier: get_live_events() active. GOAT tier: get_fight_stats() / get_round_stats() raise    │
+  │                                     │ NotImplementedError("BallDontLie GOAT tier required")                                          │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ mma/agent.py                        │ Discovers live fights; emits FIGHT_DISCOVERED synthetic events; logs GOAT-tier warning         │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/unit/test_polymarket_agent.py │ 5 async unit tests (first-poll no-emit, delta threshold, field correctness)                    │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/unit/test_mma_agent.py        │ 5 async unit tests (no-events, new fight emit, dedup, field checks)                            │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/api/test_polymarket_api.py    │ 3 live API tests (non-empty markets, prices in [0,1], rate-limit handling)                     │
+  ├─────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/api/test_mma_api.py           │ 3 live API tests (events list, both GOAT stubs raise NotImplementedError)                      │
+  └─────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  rag/ — RAG Orchestrator (FWS)
+
+  ┌─────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │              File               │                                            What it does                                            │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ context_builder.py              │ Deque sliding window (last 20 per source); serializes to compact text for prompt injection         │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ retriever.py                    │ Pinecone with two namespaces (market_events/fight_events); Gemini text-embedding-004; upsert() on  │
+  │                                 │ every event, retrieve() returns EvidenceItem[]                                                     │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ inference.py                    │ gemini-1.5-flash; structured prompt; parses CONFIDENCE: float from model output                    │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ verifier.py                     │ Rejects confidence < 0.5 with neutral message; checks explanation references trigger identifiers   │
+  │                                 │ (anti-hallucination)                                                                               │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ orchestrator.py                 │ Subscribes to engine stream → meaningful-event gate (delta ≥ 0.02) →                               │
+  │                                 │ context→retrieve→infer→verify→broadcast; also serves RagStream gRPC server                         │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/unit/test_orchestrator.py │ 5 async tests (meaningful gate, context always updated, error isolation)                           │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/unit/test_retriever.py    │ 5 tests (upsert calls Pinecone, scores sorted, namespace routing)                                  │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/unit/test_inference.py    │ 7 tests (confidence parsing, clamping, missing line fallback)                                      │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/api/test_pinecone_api.py  │ 3 live API tests (index accessible, upsert+retrieve roundtrip, score range)                        │
+  ├─────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/api/test_gemini_api.py    │ 3 live API tests (returns InferenceResult, non-empty explanation, valid confidence)                │
+  └─────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  gateway/ — WebSocket Bridge (Samad)
+
+  ┌────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────────┐
+  │              File              │                                       What it does                                        │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────┤
+  │ broadcaster.py                 │ asyncio.Lock-protected set of WebSocket clients; fan-out with silent dead-client removal  │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────┤
+  │ engine_subscriber.py           │ gRPC client → engine EventStream.Subscribe; MessageToDict → {"type":"event","data":{...}} │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────┤
+  │ rag_subscriber.py              │ gRPC client → RAG RagStream.SubscribePredictions; → {"type":"prediction","data":{...}}    │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────┤
+  │ server.py                      │ FastAPI; /health + /ws endpoints; lifespan starts both subscribers as async tasks         │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────┤
+  │ tests/unit/test_broadcaster.py │ 7 async tests (connect, disconnect, fan-out, dead-client removal, edge cases)             │
+  └────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  dashboard/ — React Frontend (Zaid)
+
+  ┌───────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────┐
+  │                     File                      │                                   What it does                                   │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ package.json                                  │ React 18, Vite, TypeScript, Tailwind, Vitest, Testing Library                    │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ tsconfig.json / tsconfig.node.json            │ Strict TypeScript config                                                         │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ vite.config.ts                                │ Dev server on :5173; proxies /ws to gateway; Vitest config                       │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ tailwind.config.ts                            │ Custom colors: pm (blue), mma (orange), confidence (green/yellow/gray)           │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ postcss.config.js                             │ Tailwind + autoprefixer                                                          │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ index.html                                    │ HTML entry point                                                                 │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/index.css                                 │ Tailwind directives                                                              │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/main.tsx                                  │ React root mount                                                                 │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/App.tsx                                   │ Root component — wires hook into layout + warning banners                        │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/types/events.ts                           │ TS mirrors of proto: MarketEvent, FightStatEvent, CanonicalEvent, EventMessage   │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/types/rag.ts                              │ TS mirrors: EvidenceItem, RagPrediction, PredictionMessage                       │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/hooks/useEventStream.ts                   │ WS lifecycle; splits by type; 3s reconnect; trims to 200 events / 50 predictions │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/components/layout/Header.tsx              │ Title + live/disconnected indicator dot                                          │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/components/layout/TwoColumnLayout.tsx     │ Left (events) / right (predictions) split                                        │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/components/events/SourceBadge.tsx         │ Blue "PM" / orange "MMA" pill                                                    │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/components/events/EventCard.tsx           │ Shows source badge, outcome, probability %, signed delta, timestamp              │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/components/events/EventFeed.tsx           │ Stream 1 column                                                                  │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/components/predictions/EvidenceList.tsx   │ Always-visible list of retrieved evidence with scores                            │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/components/predictions/PredictionCard.tsx │ Explanation + confidence bar (green/yellow) + EvidenceList                       │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/components/predictions/PredictionFeed.tsx │ Stream 2 column                                                                  │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/components/shared/StreamWarning.tsx       │ Amber banner on disconnect or parse error                                        │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/tests/hooks/useEventStream.test.ts        │ 7 Vitest tests (connect state, message routing, error handling)                  │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/tests/components/EventCard.test.tsx       │ 7 render tests                                                                   │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/tests/components/PredictionCard.test.tsx  │ 7 render tests                                                                   │
+  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ src/tests/setup.ts                            │ @testing-library/jest-dom setup                                                  │
+  └───────────────────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  Top-level config
+
+  ┌────────────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │        File        │                                                  What it does                                                   │
+  ├────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ docker-compose.yml │ All 6 services (engine, polymarket-agent, mma-agent, rag, gateway, dashboard) with internal backend network,    │
+  │                    │ health checks, env wiring                                                                                       │
+  ├────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ .env.example       │ All env vars documented with descriptions                                                                       │
+  ├────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ requirements.txt   │ Pinned Python deps (grpcio, aiohttp, pydantic, fastapi, uvicorn, google-generativeai, pinecone-client, pytest)  │
+  ├────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ pytest.ini         │ asyncio_mode=auto, api mark registered, test paths set                                                          │
+  └────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  Nothing was modified — all files are new. Let me know if anything looks off before I commit.
