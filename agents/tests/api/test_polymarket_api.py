@@ -49,9 +49,3 @@ async def test_rate_limit_respected_across_sequential_calls():
         for _ in range(3):
             markets = await client.get_markets(active_only=True)
             assert isinstance(markets, list)
-
-
-# Add __aenter__ / __aexit__ support to PolymarketClient for use as async context manager.
-# TODO(Saify): add to client.py if not present.
-PolymarketClient.__aenter__ = lambda self: self  # type: ignore[attr-defined]
-PolymarketClient.__aexit__ = lambda self, *_: self.close()  # type: ignore[attr-defined]

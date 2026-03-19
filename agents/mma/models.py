@@ -65,3 +65,6 @@ class RoundStat(BaseModel):
     round: int
     significant_strikes: int = 0
     takedowns: int = 0
+    knockdowns: int = 0
+    submission_attempts: int = 0
+    total_strikes: int = 0

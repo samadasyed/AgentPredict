@@ -15,6 +15,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+import asyncio
+
 import aiohttp
 
 from agents.polymarket.models import Market, MarketsPage, PriceSnapshot
@@ -53,7 +55,6 @@ class PolymarketClient:
             if resp.status == 429:
                 retry_after = int(resp.headers.get("Retry-After", "5"))
                 logger.warning("[polymarket] rate limited — backing off %ds", retry_after)
-                import asyncio
                 await asyncio.sleep(retry_after)
                 raise aiohttp.ClientError("rate limited")
             resp.raise_for_status()
@@ -101,8 +102,9 @@ class PolymarketClient:
         Fetch current token prices for the given market condition_ids.
         Returns a flat list of PriceSnapshots (one per token per market).
 
-        TODO(Saify): Polymarket CLOB may batch price requests — evaluate
-                     /prices-history or websocket feed for lower latency.
+        NOTE: No batch prices endpoint exists on Polymarket CLOB API (verified 2026-03-19).
+              /price and /midpoint require active orderbooks. N+1 via GET /markets/{id} is correct.
+              Future: evaluate websocket feed for lower latency.
         """
         snapshots: list[PriceSnapshot] = []
         now_ms = int(time.time() * 1000)
@@ -124,3 +126,9 @@ class PolymarketClient:
     async def close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()
+
+    async def __aenter__(self) -> "PolymarketClient":
+        return self
+
+    async def __aexit__(self, *_) -> None:
+        await self.close()

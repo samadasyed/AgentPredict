@@ -58,7 +58,7 @@ class MMAClient:
         Returns currently live or upcoming events.
         Available on free tier.
 
-        TODO(Saify): confirm exact endpoint path once API key is provisioned.
+        Endpoint path confirmed working on free tier (2026-03-19).
         """
         raw = await self._get("/events", params={"status": "in_progress"})
         events = []
@@ -96,3 +96,9 @@ class MMAClient:
     async def close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()
+
+    async def __aenter__(self) -> "MMAClient":
+        return self
+
+    async def __aexit__(self, *_) -> None:
+        await self.close()

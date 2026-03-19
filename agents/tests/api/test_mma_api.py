@@ -21,31 +21,22 @@ pytestmark = pytest.mark.api
 @pytest.mark.asyncio
 async def test_get_live_events_returns_list():
     """Free tier: live events endpoint responds and returns a list (possibly empty)."""
-    client = MMAClient()
-    try:
+    async with MMAClient() as client:
         events = await client.get_live_events()
-        assert isinstance(events, list)
-    finally:
-        await client.close()
+    assert isinstance(events, list)
 
 
 @pytest.mark.asyncio
 async def test_get_fight_stats_raises_not_implemented():
     """GOAT-tier method must raise NotImplementedError — never silently do nothing."""
-    client = MMAClient()
-    try:
+    async with MMAClient() as client:
         with pytest.raises(NotImplementedError, match="GOAT tier"):
             await client.get_fight_stats(fight_id=1)
-    finally:
-        await client.close()
 
 
 @pytest.mark.asyncio
 async def test_get_round_stats_raises_not_implemented():
     """GOAT-tier method must raise NotImplementedError."""
-    client = MMAClient()
-    try:
+    async with MMAClient() as client:
         with pytest.raises(NotImplementedError, match="GOAT tier"):
             await client.get_round_stats(fight_id=1, round_num=1)
-    finally:
-        await client.close()
