@@ -79,9 +79,22 @@ Added the following to `mma/agent.py` (not fully implemented — GOAT tier purch
 - Runs proto codegen + sed fix for the bare import issue
 - No default CMD — each agent is started via docker-compose `command` override
 
+### 6. GOAT Tier Unit Tests & .env.example Update (2026-03-20)
+
+Added `BALLDONTLIE_GOAT_TIER=0` to `.env.example` with documentation comment.
+
+Wrote 5 unit tests for `_poll_fight_stats()` GOAT tier logic in `test_mma_agent.py`:
+- `test_goat_stat_change_emits_event` — verifies stat changes emit FightStatEvents (significant_strikes, takedowns)
+- `test_goat_no_change_no_emit` — duplicate stats on second poll are not re-emitted
+- `test_goat_completed_fight_stops_polling` — completed fights skip stat polling
+- `test_goat_stub_not_implemented_handled` — graceful fallback when GOAT stubs still raise NotImplementedError
+- `test_goat_scheduled_fight_skipped` — non-in_progress fights are skipped
+
+Uses `monkeypatch` to enable `_GOAT_TIER_ENABLED` without affecting other tests.
+
 ---
 
-## Test Results
+## Test Results (Updated 2026-03-20)
 
 ```
 agents/tests/unit/test_mma_agent.py::test_no_live_events_emits_nothing         PASSED
@@ -89,13 +102,18 @@ agents/tests/unit/test_mma_agent.py::test_new_fight_emits_fight_discovered     P
 agents/tests/unit/test_mma_agent.py::test_known_fight_not_re_emitted           PASSED
 agents/tests/unit/test_mma_agent.py::test_fight_discovered_event_fields        PASSED
 agents/tests/unit/test_mma_agent.py::test_multiple_fights_each_emitted_once    PASSED
+agents/tests/unit/test_mma_agent.py::test_goat_stat_change_emits_event         PASSED
+agents/tests/unit/test_mma_agent.py::test_goat_no_change_no_emit              PASSED
+agents/tests/unit/test_mma_agent.py::test_goat_completed_fight_stops_polling   PASSED
+agents/tests/unit/test_mma_agent.py::test_goat_stub_not_implemented_handled    PASSED
+agents/tests/unit/test_mma_agent.py::test_goat_scheduled_fight_skipped         PASSED
 agents/tests/unit/test_polymarket_agent.py::test_first_poll_does_not_emit      PASSED
 agents/tests/unit/test_polymarket_agent.py::test_significant_delta_emits_event PASSED
 agents/tests/unit/test_polymarket_agent.py::test_sub_threshold_delta_does_not_emit PASSED
 agents/tests/unit/test_polymarket_agent.py::test_no_active_markets_skips_gracefully PASSED
 agents/tests/unit/test_polymarket_agent.py::test_emitted_event_has_correct_fields  PASSED
 
-10 passed in 0.21s
+15 passed in 0.22s
 ```
 
 ---
@@ -114,6 +132,8 @@ agents/tests/unit/test_polymarket_agent.py::test_emitted_event_has_correct_field
 | `agents/mma/agent.py` | Modified (GOAT tier scaffolding) |
 | `agents/tests/api/test_polymarket_api.py` | Modified (monkey-patch removed) |
 | `agents/tests/api/test_mma_api.py` | Modified (refactored to context managers) |
+| `.env.example` | Modified (added BALLDONTLIE_GOAT_TIER) |
+| `agents/tests/unit/test_mma_agent.py` | Modified (5 GOAT tier tests added) |
 
 ---
 
@@ -128,7 +148,7 @@ agents/tests/unit/test_polymarket_agent.py::test_emitted_event_has_correct_field
 | MMAClient context manager | Done | |
 | RoundStat model completion | Done | |
 | GOAT tier stat polling | Scaffolded | Needs GOAT tier purchase + real HTTP implementation in client stubs |
-| Unit tests for _poll_fight_stats | Not started | Should be written when GOAT tier is activated |
+| Unit tests for _poll_fight_stats | Done | 5 tests covering stat changes, dedup, completed/scheduled skipping, stub handling |
 | agents/Dockerfile | Done | |
-| Add BALLDONTLIE_GOAT_TIER to .env.example | Not done | Minor — should be added before merge |
+| Add BALLDONTLIE_GOAT_TIER to .env.example | Done | Added with documentation comment |
 | Polymarket websocket feed evaluation | Future | Lower latency alternative to polling |
