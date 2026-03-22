@@ -92,9 +92,31 @@ Wrote 5 unit tests for `_poll_fight_stats()` GOAT tier logic in `test_mma_agent.
 
 Uses `monkeypatch` to enable `_GOAT_TIER_ENABLED` without affecting other tests.
 
+### 7. MMA Models & Client Expanded to 3-Tier Structure (2026-03-22)
+
+Updated `mma/models.py` and `mma/client.py` to accurately reflect the BallDontLie API tier structure:
+
+**models.py** — Expanded from 71 to 116 lines:
+- Added free-tier models: `WeightClass`, `League`, `Fighter` (with `full_name`/`record` properties)
+- Added ALL-STAR tier model: `Fight` (id, event_id, fighter1/fighter2, status, round, winner_id)
+- Added `fights: list[Fight] = []` to `Event` (populated only on ALL-STAR tier, empty on free)
+- Added `model_rebuild()` to resolve forward reference (Event → Fight)
+- Corrected tier documentation: Free = events/fighters/leagues, ALL-STAR ($9.99/mo) = fights/rankings, GOAT ($39.99/mo) = fight stats/betting odds
+
+**client.py** — Expanded from 105 to 156 lines:
+- New free-tier methods: `get_events(year?)`, `get_fighters(search?, fighter_ids?)`, `get_fighter(id)`
+- New `_parse_list()` helper to DRY up response parsing across endpoints
+- New ALL-STAR tier stub: `get_fights(event_id)` — raises `NotImplementedError`
+- Updated imports and tier documentation
+
+**test_mma_api.py** — 3 new API tests (6 total, up from 3):
+- `test_get_events_returns_list` — free tier events endpoint
+- `test_get_fighters_returns_list` — free tier fighters endpoint
+- `test_get_fights_raises_not_implemented` — ALL-STAR stub verification
+
 ---
 
-## Test Results (Updated 2026-03-20)
+## Test Results (Updated 2026-03-22)
 
 ```
 agents/tests/unit/test_mma_agent.py::test_no_live_events_emits_nothing         PASSED
@@ -114,6 +136,14 @@ agents/tests/unit/test_polymarket_agent.py::test_no_active_markets_skips_gracefu
 agents/tests/unit/test_polymarket_agent.py::test_emitted_event_has_correct_fields  PASSED
 
 15 passed in 0.22s
+
+--- API tests (6 collected) ---
+agents/tests/api/test_mma_api.py::test_get_live_events_returns_list          COLLECTED
+agents/tests/api/test_mma_api.py::test_get_events_returns_list               COLLECTED
+agents/tests/api/test_mma_api.py::test_get_fighters_returns_list             COLLECTED
+agents/tests/api/test_mma_api.py::test_get_fights_raises_not_implemented     COLLECTED
+agents/tests/api/test_mma_api.py::test_get_fight_stats_raises_not_implemented COLLECTED
+agents/tests/api/test_mma_api.py::test_get_round_stats_raises_not_implemented COLLECTED
 ```
 
 ---
@@ -134,6 +164,9 @@ agents/tests/unit/test_polymarket_agent.py::test_emitted_event_has_correct_field
 | `agents/tests/api/test_mma_api.py` | Modified (refactored to context managers) |
 | `.env.example` | Modified (added BALLDONTLIE_GOAT_TIER) |
 | `agents/tests/unit/test_mma_agent.py` | Modified (5 GOAT tier tests added) |
+| `agents/mma/models.py` | Modified (3-tier model expansion: WeightClass, League, Fighter, Fight) |
+| `agents/mma/client.py` | Modified (free-tier methods, ALL-STAR stub, _parse_list helper) |
+| `agents/tests/api/test_mma_api.py` | Modified (3 new API tests: events, fighters, fights stub) |
 
 ---
 
@@ -147,7 +180,9 @@ agents/tests/unit/test_polymarket_agent.py::test_emitted_event_has_correct_field
 | PolymarketClient context manager | Done | |
 | MMAClient context manager | Done | |
 | RoundStat model completion | Done | |
+| MMA models/client 3-tier expansion | Done | Free/ALL-STAR/GOAT models and client methods |
 | GOAT tier stat polling | Scaffolded | Needs GOAT tier purchase + real HTTP implementation in client stubs |
+| ALL-STAR tier fights | Stubbed | Needs ALL-STAR tier purchase ($9.99/mo) |
 | Unit tests for _poll_fight_stats | Done | 5 tests covering stat changes, dedup, completed/scheduled skipping, stub handling |
 | agents/Dockerfile | Done | |
 | Add BALLDONTLIE_GOAT_TIER to .env.example | Done | Added with documentation comment |
