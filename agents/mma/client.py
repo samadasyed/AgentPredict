@@ -1,8 +1,9 @@
 """
 BallDontLie MMA API client.
 
-Free tier: event discovery (get_live_events).
-GOAT tier: fight stats and round stats (STUBBED — raises NotImplementedError).
+Free tier: events, fighters, leagues.
+ALL-STAR tier ($9.99/mo): fights, rankings.
+GOAT tier ($39.99/mo): fight stats, betting odds (STUBBED — raises NotImplementedError).
 
 Owner: Saify
 """
@@ -15,7 +16,7 @@ from typing import Any
 
 import aiohttp
 
-from agents.mma.models import Event, Fight, FightStat, RoundStat
+from agents.mma.models import Event, Fight, Fighter, FightStat, RoundStat
 from agents.shared.retry import retry
 
 logger = logging.getLogger(__name__)
@@ -56,18 +57,69 @@ class MMAClient:
     async def get_live_events(self) -> list[Event]:
         """
         Returns currently live or upcoming events.
-        Available on free tier.
-
-        Endpoint path confirmed working on free tier (2026-03-19).
+        Available on free tier. Note: events do NOT include fights (ALL-STAR tier).
         """
         raw = await self._get("/events", params={"status": "in_progress"})
-        events = []
+        return self._parse_list(raw, Event, "event")
+
+    async def get_events(self, year: int | None = None) -> list[Event]:
+        """Get events, optionally filtered by year."""
+        params: dict[str, Any] = {}
+        if year:
+            params["year"] = year
+        raw = await self._get("/events", params=params or None)
+        return self._parse_list(raw, Event, "event")
+
+    async def get_fighters(
+        self, search: str | None = None, fighter_ids: list[int] | None = None,
+    ) -> list[Fighter]:
+        """
+        Search fighters by name or fetch by IDs. Free tier.
+
+        Args:
+            search: Name search string (e.g. "McGregor").
+            fighter_ids: List of fighter IDs to fetch.
+        """
+        params: dict[str, Any] = {}
+        if search:
+            params["search"] = search
+        if fighter_ids:
+            params["fighter_ids[]"] = fighter_ids
+        raw = await self._get("/fighters", params=params or None)
+        return self._parse_list(raw, Fighter, "fighter")
+
+    async def get_fighter(self, fighter_id: int) -> Fighter | None:
+        """Get a single fighter by ID. Free tier."""
+        try:
+            raw = await self._get(f"/fighters/{fighter_id}")
+            data = raw.get("data", raw)
+            return Fighter(**data)
+        except Exception as exc:
+            logger.warning("[mma-client] failed to fetch fighter %d: %s", fighter_id, exc)
+            return None
+
+    def _parse_list(self, raw: dict, model: type, label: str) -> list:
+        """Parse a paginated API response into a list of models."""
+        items = []
         for item in raw.get("data", []):
             try:
-                events.append(Event(**item))
+                items.append(model(**item))
             except Exception as exc:
-                logger.warning("[mma-client] failed to parse event: %s — %s", item, exc)
-        return events
+                logger.warning("[mma-client] failed to parse %s: %s — %s", label, item, exc)
+        return items
+
+    # ─── ALL-STAR tier (STUBBED) ─────────────────────────────────────────────
+
+    async def get_fights(self, event_id: int) -> list[Fight]:
+        """
+        Get fights for an event.
+        REQUIRES BallDontLie ALL-STAR tier ($9.99/mo).
+        """
+        # ALL-STAR tier required — do not remove this stub.
+        raise NotImplementedError(
+            "BallDontLie ALL-STAR tier required to access fights. "
+            "Upgrade at https://mma.balldontlie.io and set BALLDONTLIE_API_KEY."
+        )
 
     # ─── GOAT tier (STUBBED) ──────────────────────────────────────────────────
 

@@ -27,6 +27,30 @@ async def test_get_live_events_returns_list():
 
 
 @pytest.mark.asyncio
+async def test_get_events_returns_list():
+    """Free tier: events endpoint responds and returns a list."""
+    async with MMAClient() as client:
+        events = await client.get_events()
+    assert isinstance(events, list)
+
+
+@pytest.mark.asyncio
+async def test_get_fighters_returns_list():
+    """Free tier: fighters endpoint responds and returns a list."""
+    async with MMAClient() as client:
+        fighters = await client.get_fighters()
+    assert isinstance(fighters, list)
+
+
+@pytest.mark.asyncio
+async def test_get_fights_raises_not_implemented():
+    """ALL-STAR-tier method must raise NotImplementedError."""
+    async with MMAClient() as client:
+        with pytest.raises(NotImplementedError, match="ALL-STAR tier"):
+            await client.get_fights(event_id=1)
+
+
+@pytest.mark.asyncio
 async def test_get_fight_stats_raises_not_implemented():
     """GOAT-tier method must raise NotImplementedError — never silently do nothing."""
     async with MMAClient() as client:
