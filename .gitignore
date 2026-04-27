@@ -20,3 +20,11 @@ __pycache__/
 .ssh/
 # Added by code-review-graph
 .code-review-graph/
+
+# Secrets — never commit. Use .env.example as the tracked template.
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/

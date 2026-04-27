@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 _PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
 _PINECONE_INDEX  = os.getenv("PINECONE_INDEX_NAME", "agentpredict")
 _GOOGLE_API_KEY  = os.getenv("GOOGLE_API_KEY", "")
-_EMBEDDING_MODEL = "models/text-embedding-004"
-_EMBEDDING_DIM   = 768  # text-embedding-004 output dimension
+_EMBEDDING_MODEL = "models/gemini-embedding-001"
+_EMBEDDING_DIM   = 768  # gemini-embedding-001 native dim is 3072; truncated via Matryoshka
 _TOP_K           = 5
 
 
@@ -85,6 +85,7 @@ class Retriever:
             model=_EMBEDDING_MODEL,
             content=text,
             task_type="retrieval_document",
+            output_dimensionality=_EMBEDDING_DIM,
         )
         return result["embedding"]
 

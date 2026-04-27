@@ -22,7 +22,7 @@ from agents.generated import events_pb2  # type: ignore[import]
 logger = logging.getLogger(__name__)
 
 _GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
-_MODEL_NAME     = "gemini-1.5-flash"
+_MODEL_NAME     = "gemini-2.5-flash"
 
 _SYSTEM_PROMPT = """\
 You are a live UFC / Polymarket trading analyst. Your job is to explain, \

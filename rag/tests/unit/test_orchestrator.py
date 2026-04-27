@@ -4,12 +4,14 @@ Unit tests for RAG Orchestrator — mocks all external dependencies.
 
 from __future__ import annotations
 
+import threading
 import time
+from queue import Empty
 from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
-from rag.orchestrator import Orchestrator, _is_meaningful
+from rag.orchestrator import Orchestrator, RagStreamServiceImpl, _is_meaningful
 from agents.generated import events_pb2  # type: ignore[import]
 
 
@@ -115,3 +117,74 @@ async def test_inference_error_does_not_crash(orchestrator_with_mocks):
     # Should log but not raise
     await orch._handle_event(ev)
     orch._rag_service.broadcast.assert_not_called()
+
+
+# ─── RagStreamServiceImpl ─────────────────────────────────────────────────────
+
+def _prediction(confidence: float = 0.8) -> events_pb2.RagPrediction:
+    pred = events_pb2.RagPrediction()
+    pred.explanation = "test"
+    pred.confidence = confidence
+    pred.timestamp = int(time.time() * 1000)
+    pred.trigger_event_id = "evt-1"
+    return pred
+
+
+def test_register_then_broadcast_delivers():
+    svc = RagStreamServiceImpl()
+    q = svc.register_subscriber()
+    pred = _prediction()
+    svc.broadcast(pred)
+    assert q.get_nowait().explanation == "test"
+
+
+def test_unregister_stops_delivery():
+    svc = RagStreamServiceImpl()
+    q = svc.register_subscriber()
+    svc.unregister_subscriber(q)
+    svc.broadcast(_prediction())
+    with pytest.raises(Empty):
+        q.get_nowait()
+
+
+def test_broadcast_drops_silently_when_queue_full():
+    svc = RagStreamServiceImpl()
+    q = svc.register_subscriber()
+    # Queue maxsize is 100 — overflow it. broadcast must not raise.
+    for _ in range(150):
+        svc.broadcast(_prediction())
+    assert q.qsize() == 100  # capped, no exception leaked out
+
+
+def test_concurrent_register_unregister_broadcast_no_crash():
+    """register and unregister run on gRPC threadpool workers while
+    broadcast runs on the asyncio loop — pound on all three from
+    multiple threads to confirm threading.Lock makes it safe."""
+    svc = RagStreamServiceImpl()
+    stop = threading.Event()
+    errors: list[BaseException] = []
+
+    def churn():
+        try:
+            while not stop.is_set():
+                q = svc.register_subscriber()
+                svc.unregister_subscriber(q)
+        except BaseException as e:
+            errors.append(e)
+
+    def broadcaster():
+        try:
+            while not stop.is_set():
+                svc.broadcast(_prediction())
+        except BaseException as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=churn) for _ in range(4)]
+    threads += [threading.Thread(target=broadcaster) for _ in range(2)]
+    for t in threads:
+        t.start()
+    time.sleep(0.2)
+    stop.set()
+    for t in threads:
+        t.join(timeout=2.0)
+    assert not errors, f"thread errors: {errors}"
