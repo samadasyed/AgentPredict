@@ -2,7 +2,9 @@ __pycache__/
 *.pyc
 .cache/
 .claude.json
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/anthropic/*/LICENSE.txt
 .copilot/
 .dotnet/
 .local/
