@@ -16,3 +16,5 @@ __pycache__/
 .lesshst
 .wget-hsts
 .ssh/
+# Added by code-review-graph
+.code-review-graph/
