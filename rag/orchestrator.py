@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 import time
 from concurrent import futures
 from queue import Queue, Empty
@@ -80,21 +81,27 @@ class RagStreamServiceImpl(events_pb2_grpc.RagStreamServicer):
 
     def __init__(self) -> None:
         self._subscribers: list[Queue] = []
-        self._lock = asyncio.Lock()  # NOTE: used from sync context via run_coroutine_threadsafe
+        # threading.Lock — register/unregister run on gRPC thread pool workers,
+        # broadcast runs on the asyncio loop thread. Both must serialize.
+        self._lock = threading.Lock()
 
     def register_subscriber(self) -> Queue:
         q: Queue = Queue(maxsize=100)
-        self._subscribers.append(q)
+        with self._lock:
+            self._subscribers.append(q)
         return q
 
     def unregister_subscriber(self, q: Queue) -> None:
-        try:
-            self._subscribers.remove(q)
-        except ValueError:
-            pass
+        with self._lock:
+            try:
+                self._subscribers.remove(q)
+            except ValueError:
+                pass
 
     def broadcast(self, prediction: "events_pb2.RagPrediction") -> None:
-        for q in list(self._subscribers):
+        with self._lock:
+            snapshot = list(self._subscribers)
+        for q in snapshot:
             try:
                 q.put_nowait(prediction)
             except Exception:
@@ -107,7 +114,7 @@ class RagStreamServiceImpl(events_pb2_grpc.RagStreamServicer):
     ) -> Iterator["events_pb2.RagPrediction"]:
         q = self.register_subscriber()
         try:
-            while not context.is_active() is False:
+            while context.is_active():
                 try:
                     pred = q.get(timeout=1.0)
                     if pred.confidence >= request.min_confidence:
