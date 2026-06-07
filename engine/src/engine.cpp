@@ -44,6 +44,11 @@ bool ParseRingCapacity(const std::string& s, size_t& out) {
     return true;
 }
 
+// Delegate to the explicit ctor with a freshly default-constructed Config. Legal
+// here (unlike a `= {}` default arg in the header) because Engine and Config are
+// both complete at this point.
+Engine::Engine() : Engine(Config{}) {}
+
 Engine::Engine(Config cfg)
     : cfg_(std::move(cfg)),
       store_(std::make_shared<EventStore>(cfg_.ring_capacity)),

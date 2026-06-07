@@ -24,7 +24,13 @@ public:
         size_t      ring_capacity = 4096;
     };
 
-    explicit Engine(Config cfg = {});
+    // Two constructors instead of one with a `Config cfg = {}` default argument:
+    // a brace-init default arg would force evaluation of Config's default member
+    // initializers inside Engine's still-incomplete class body, which is ill-formed
+    // (CWG 1397 — "default member initializer required before the end of its
+    // enclosing class"). Defaulting out of line in engine.cpp sidesteps that.
+    Engine();                     // default-configured engine
+    explicit Engine(Config cfg);  // engine with an explicit config
     ~Engine() = default;
 
     // Non-copyable, non-movable.

@@ -659,10 +659,10 @@ npm test
 
 ## Known Limitations / TODOs
 
-- **Dashboard Dockerfile** — `dashboard/Dockerfile.dev` (node:20 + vite) still needs to be created; until then `docker compose up --build` fails at the `dashboard` service. (`engine`, `agents`, `rag`, and `gateway` Dockerfiles exist.)
-- **Proto stubs** — Python stubs in `agents/generated/` must be generated before any Python service can run (see step 1 in [Running Locally](#running-locally))
+- **All five service images build** (`engine`, `gateway`, `agents`, `rag`, `dashboard`) and the full stack has been verified end-to-end on synthetic data (both browser streams) without any external APIs — see [Running Locally](#running-locally). Real data still requires the API keys below.
+- **Proto stubs** — Python stubs in `agents/generated/` must be generated before any Python service can run (see step 1 in [Running Locally](#running-locally)); the Dockerfiles generate them automatically at image build time.
+- **External APIs required for real data** — `GOOGLE_API_KEY` + `PINECONE_API_KEY`/`PINECONE_INDEX_NAME` for RAG, and `BALLDONTLIE_API_KEY` for the MMA agent. Without them the `rag` service exits at startup and the `mma-agent` produces no events; `engine`, `gateway`, `dashboard`, and the Polymarket agent (public CLOB API, no key) run fine.
 - **MMA live stats** — `get_fight_stats()` and `get_round_stats()` raise `NotImplementedError` until the BallDontLie GOAT tier ($39.99/mo) is activated
 - **gRPC TLS** — all channels use `insecure_channel`; add TLS + auth interceptor before any public deployment
 - **Cursor resume is server-side only** — `EventStreamServiceImpl::Subscribe` now parses `SubscribeRequest.cursor` (`""` = live tail, `"0"` = replay retained history), but `CanonicalEvent` carries no sequence field, so a client can't checkpoint an arbitrary mid-stream position; the gateway subscribes at live tail. Full resume needs a per-event sequence + client-side dedup on `event_id`.
 - **UUID library** — `Normalizer::GenerateUUID()` uses a minimal in-house implementation; replace with `libuuid` or `boost::uuid` in production
-- **Polymarket context manager** — `PolymarketClient` needs `__aenter__`/`__aexit__` added to `client.py` (temporary workaround exists in the API test file)
