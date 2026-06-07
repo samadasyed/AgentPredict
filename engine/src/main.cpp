@@ -12,11 +12,21 @@ int main(int /*argc*/, char* /*argv*/[]) {
         cfg.grpc_address = addr;
     }
 
-    // TODO: parse additional config (ring capacity, log level) from env/flags.
+    // Optional ring-buffer capacity override (must be a power of 2 in [1, 1<<24]).
+    if (const char* cap = std::getenv("ENGINE_RING_CAPACITY"); cap != nullptr) {
+        if (!agentpredict::ParseRingCapacity(cap, cfg.ring_capacity)) {
+            std::cerr << "[engine] invalid ENGINE_RING_CAPACITY=\"" << cap
+                      << "\" — must be a power of 2 in [1, 16777216]\n";
+            return 1;
+        }
+    }
 
-    agentpredict::Engine engine(cfg);
+    // TODO: wire a structured logger + ENGINE_LOG_LEVEL (currently cout/cerr only).
 
     try {
+        // Construct inside the try: the EventStore ctor validates ring_capacity
+        // and can throw std::invalid_argument.
+        agentpredict::Engine engine(cfg);
         engine.Run();  // blocks until shutdown signal
     } catch (const std::exception& ex) {
         std::cerr << "[engine] fatal: " << ex.what() << '\n';

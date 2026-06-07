@@ -12,27 +12,32 @@ services:
   # Owner: Samad
   engine:
     build:
-      context: ./engine
-      dockerfile: Dockerfile  # TODO: create engine/Dockerfile (C++/CMake build)
+      context: .                  # repo root: CMakeLists needs ../proto alongside engine/
+      dockerfile: engine/Dockerfile
     environment:
       ENGINE_GRPC_ADDRESS: "0.0.0.0:50051"
+      ENGINE_RING_CAPACITY: "4096"   # ring-buffer depth; must be a power of 2
     expose:
       - "50051"
     networks:
       - backend
+    init: true                    # PID-1 reaping + SIGTERM forwarding for clean shutdown
     restart: unless-stopped
+    # Dependency-free liveness probe: the gRPC port is accepting connections.
+    # (The engine also serves grpc.health.v1.Health for grpc_health_probe / k8s.)
     healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/50051"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
   # Polymarket polling agent
   # Owner: Saify
   polymarket-agent:
     build:
       context: .
-      dockerfile: agents/Dockerfile  # TODO: create agents/Dockerfile
+      dockerfile: agents/Dockerfile
     command: ["python", "-m", "agents.polymarket.agent"]
     environment:
       ENGINE_GRPC_ADDRESS: "engine:50051"
@@ -71,7 +76,7 @@ services:
   rag:
     build:
       context: .
-      dockerfile: rag/Dockerfile  # TODO: create rag/Dockerfile
+      dockerfile: rag/Dockerfile
     command: ["python", "-m", "rag.orchestrator"]
     environment:
       ENGINE_GRPC_ADDRESS: "engine:50051"
@@ -92,7 +97,7 @@ services:
   gateway:
     build:
       context: .
-      dockerfile: gateway/Dockerfile  # TODO: create gateway/Dockerfile
+      dockerfile: gateway/Dockerfile
     command: ["uvicorn", "gateway.server:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       ENGINE_GRPC_ADDRESS: "engine:50051"
@@ -110,6 +115,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
   # React Dashboard — dev server :5173
   # Owner: Zaid

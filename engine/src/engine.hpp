@@ -7,6 +7,14 @@
 
 namespace agentpredict {
 
+// Parse & validate a ring-buffer capacity from a config string (e.g. the
+// ENGINE_RING_CAPACITY env var). Accepts a bare non-negative decimal integer
+// that is a power of 2 within [1, 1<<24]. Returns false (leaving `out` unchanged)
+// for empty / signed / non-numeric / overflowing / zero / non-power-of-2 / too-large
+// input, so the caller can emit one clear error at the config boundary instead of
+// letting a deep EventStore allocation/throw surface the failure.
+bool ParseRingCapacity(const std::string& s, size_t& out);
+
 // Top-level engine object — wires together EventStore, Normalizer, gRPC server.
 // Owned by main(); exposed here so tests can construct a headless engine.
 class Engine {

@@ -87,8 +87,17 @@ service EventStream {
 }
 
 message SubscribeRequest {
-  // If non-empty, resume from this cursor (ring-buffer position).
-  // Leave empty to start from the latest event.
+  // Ring-buffer start position:
+  //   ""    -> live tail: only events that arrive after subscribing.
+  //   "0"   -> replay the full retained history (oldest available event), then live.
+  //   "<N>" -> resume at retained position N (INCLUSIVE), clamped to the oldest
+  //            retained event if N has already been overwritten.
+  // Malformed values (signs, non-digits, overflow) are rejected with INVALID_ARGUMENT.
+  //
+  // NOTE: CanonicalEvent carries no sequence field today, so a client cannot learn
+  // its own position mid-stream — practical use is "" (live) or "0" (full replay).
+  // Arbitrary mid-stream resume needs a future per-event sequence; until then,
+  // clients that replay should dedup on event_id.
   string cursor = 1;
 
   // Optional source filter; SOURCE_UNKNOWN means "all sources".

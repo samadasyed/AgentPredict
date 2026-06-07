@@ -1,0 +1,39 @@
+# All service images build with `context: .` (repo root). Keep host-only and
+# generated artifacts out of the build context: smaller/faster builds, and — most
+# importantly — prevent a stale local CMake build dir (engine/build/CMakeCache.txt
+# pins absolute host paths) from poisoning the in-image build.
+
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv-test/
+*.egg-info/
+.pytest_cache/
+# Regenerated inside each image from proto/ via grpc_tools.protoc.
+agents/generated/
+
+# C++ build output (regenerated inside the engine image).
+engine/build/
+build/
+
+# Node / dashboard
+dashboard/node_modules/
+dashboard/dist/
+node_modules/
+
+# Secrets and local env
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Editor / tooling
+.vscode/
+.idea/
+.claude/
+.code-review-graph/

@@ -1,6 +1,8 @@
 add_executable(engine_unit_tests
   test_normalizer.cpp
   test_event_store.cpp
+  test_grpc_server.cpp
+  test_engine_config.cpp
 )
 
 target_link_libraries(engine_unit_tests PRIVATE

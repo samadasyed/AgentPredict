@@ -34,6 +34,18 @@ private:
 // ─── EventStream service impl ─────────────────────────────────────────────────
 // Gateway subscribes to Subscribe(); server streams normalized events.
 
+// Resolves the starting ring-buffer cursor for a Subscribe call.
+//   ""        -> out_cursor = tail_cursor (live: only events that arrive later)
+//   "0".."N"  -> out_cursor = parsed value (GetSince is inclusive of it and
+//                clamps to the oldest retained event, so "0" replays the full
+//                retained history before going live)
+// Returns false if the string is non-empty and not a bare non-negative decimal
+// integer in range — std::stoull alone silently accepts "-1" (wraps to UINT64_MAX),
+// "+5", and leading whitespace, so those are rejected explicitly.
+bool ResolveStartCursor(const std::string& cursor_str,
+                        uint64_t            tail_cursor,
+                        uint64_t&           out_cursor);
+
 class EventStreamServiceImpl final
     : public agentpredict::EventStream::Service {
 public:

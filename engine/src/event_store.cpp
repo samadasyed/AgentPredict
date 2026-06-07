@@ -6,10 +6,14 @@
 
 namespace agentpredict {
 
-EventStore::EventStore(size_t capacity) : capacity_(capacity), ring_(capacity) {
+EventStore::EventStore(size_t capacity) : capacity_(capacity) {
+    // Validate BEFORE allocating: a garbage/huge capacity must fail with a clear
+    // invalid_argument, not attempt a multi-GB ring allocation first (which would
+    // throw bad_alloc/length_error from the member-init list).
     if (capacity == 0 || (capacity & (capacity - 1)) != 0) {
         throw std::invalid_argument("EventStore capacity must be a power of 2");
     }
+    ring_.resize(capacity);
 }
 
 // ─── Write ────────────────────────────────────────────────────────────────────

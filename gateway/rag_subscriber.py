@@ -10,9 +10,9 @@ import logging
 import os
 
 import grpc
-from google.protobuf.json_format import MessageToDict
 
 from gateway.broadcaster import Broadcaster
+from gateway.proto_utils import to_dict
 from agents.generated import events_pb2, events_pb2_grpc  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
@@ -49,11 +49,7 @@ class RagSubscriber:
             request = events_pb2.RagSubscribeRequest(min_confidence=self._min_confidence)
 
             async for prediction in stub.SubscribePredictions(request):
-                data = MessageToDict(
-                    prediction,
-                    preserving_proto_field_name=True,
-                    including_default_value_fields=True,
-                )
+                data = to_dict(prediction)
                 await self._broadcaster.broadcast({"type": "prediction", "data": data})
         finally:
             await channel.close()
