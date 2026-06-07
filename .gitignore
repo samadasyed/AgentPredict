@@ -2,7 +2,9 @@ __pycache__/
 *.pyc
 .cache/
 .claude.json
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/anthropic/*/LICENSE.txt
 .copilot/
 .dotnet/
 .local/
@@ -16,3 +18,13 @@ __pycache__/
 .lesshst
 .wget-hsts
 .ssh/
+# Added by code-review-graph
+.code-review-graph/
+
+# Secrets — never commit. Use .env.example as the tracked template.
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/

@@ -16,6 +16,7 @@ Owner: Samad
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 
@@ -69,13 +70,30 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     await ws.accept()
     await broadcaster.connect(ws)
     try:
-        # Keep the connection alive; browser sends pings, we pong via FastAPI.
+        # Keep the connection alive and handle client control messages.
         while True:
-            # Wait for any client message (ping / close frame).
-            data = await ws.receive_text()
-            # TODO: handle client-side filter messages (e.g. {"action": "filter", "source": "pm"})
-            logger.debug("[gateway] received from client: %s", data)
+            raw = await ws.receive_text()
+            await _handle_client_message(ws, raw)
     except WebSocketDisconnect:
         pass
     finally:
         await broadcaster.disconnect(ws)
+
+
+async def _handle_client_message(ws: WebSocket, raw: str) -> None:
+    """Apply a client control frame; ignore pings / malformed input without dropping the socket.
+
+    Supported:
+      {"action": "filter", "source": "pm" | "polymarket" | "mma" | "all"}
+        — narrow this client's Stream-1 events to one source ("all" clears it).
+    """
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        logger.debug("[gateway] ignoring non-JSON client frame: %.80s", raw)
+        return
+    # json.loads accepts bare numbers/strings/arrays too — guard before .get().
+    if isinstance(data, dict) and data.get("action") == "filter":
+        await broadcaster.set_filter(ws, data.get("source"))
+    else:
+        logger.debug("[gateway] unhandled client message: %.80s", raw)

@@ -53,12 +53,20 @@ export function useEventStream(): UseEventStreamResult {
 
         if (envelope.type === 'event') {
           setEvents((prev) => {
-            const next = [envelope.data as CanonicalEvent, ...prev]
+            const incoming = envelope.data as CanonicalEvent
+            // The gateway replays its recent buffer on every (re)connect; since we
+            // reconnect on any close, dedup by event_id so replayed rows don't pile up.
+            if (prev.some((e) => e.event_id === incoming.event_id)) return prev
+            const next = [incoming, ...prev]
             return next.length > MAX_EVENTS ? next.slice(0, MAX_EVENTS) : next
           })
         } else if (envelope.type === 'prediction') {
           setPredictions((prev) => {
-            const next = [envelope.data as RagPrediction, ...prev]
+            const incoming = envelope.data as RagPrediction
+            // RagPrediction has no id; a replay is identical in (trigger, timestamp).
+            const key = (p: RagPrediction) => `${p.trigger_event_id}:${p.timestamp}`
+            if (prev.some((p) => key(p) === key(incoming))) return prev
+            const next = [incoming, ...prev]
             return next.length > MAX_PREDS ? next.slice(0, MAX_PREDS) : next
           })
         } else {

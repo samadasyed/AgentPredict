@@ -94,6 +94,35 @@ describe('useEventStream', () => {
     expect(result.current.events).toHaveLength(0)
   })
 
+  it('dedups replayed events by event_id (e.g. on reconnect replay)', () => {
+    const { result } = renderHook(() => useEventStream())
+    act(() => MockWebSocket.instances[0].simulateOpen())
+    const ev = {
+      type: 'event',
+      data: {
+        event_id: 'ev-1',
+        source: 'SOURCE_MMA',
+        ingested_at: 1000,
+        fight_event: { fight_id: 'f1', fighter_name: 'A', stat_type: 'x', value: 1, round: 1, timestamp: 1000 },
+      },
+    }
+    act(() => MockWebSocket.instances[0].simulateMessage(ev))
+    act(() => MockWebSocket.instances[0].simulateMessage(ev)) // replayed duplicate
+    expect(result.current.events).toHaveLength(1)
+  })
+
+  it('dedups replayed predictions by (trigger_event_id, timestamp)', () => {
+    const { result } = renderHook(() => useEventStream())
+    act(() => MockWebSocket.instances[0].simulateOpen())
+    const pred = {
+      type: 'prediction',
+      data: { explanation: 'x', evidence: [], confidence: 0.7, timestamp: 2000, trigger_event_id: 'ev-1' },
+    }
+    act(() => MockWebSocket.instances[0].simulateMessage(pred))
+    act(() => MockWebSocket.instances[0].simulateMessage(pred)) // replayed duplicate
+    expect(result.current.predictions).toHaveLength(1)
+  })
+
   it('sets error on malformed JSON', () => {
     const { result } = renderHook(() => useEventStream())
     act(() => MockWebSocket.instances[0].simulateOpen())

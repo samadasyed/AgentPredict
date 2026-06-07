@@ -2,9 +2,42 @@
 
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/server_builder.h>
+#include <grpcpp/health_check_service_interface.h>
+#include <algorithm>
+#include <cctype>
 #include <iostream>
+#include <stdexcept>
 
 namespace agentpredict {
+
+// ─── Cursor parsing ───────────────────────────────────────────────────────────
+
+bool ResolveStartCursor(const std::string& cursor_str,
+                        uint64_t            tail_cursor,
+                        uint64_t&           out_cursor) {
+    if (cursor_str.empty()) {
+        out_cursor = tail_cursor;  // live tail
+        return true;
+    }
+    // Require a pure run of ASCII digits: rejects signs ("-1", "+5"), leading
+    // whitespace ("  5"), hex ("0x10"), and trailing junk ("12abc") — all of
+    // which std::stoull would otherwise silently accept or partially parse.
+    if (!std::all_of(cursor_str.begin(), cursor_str.end(),
+                     [](unsigned char c) { return std::isdigit(c) != 0; })) {
+        return false;
+    }
+    try {
+        size_t pos = 0;
+        unsigned long long parsed = std::stoull(cursor_str, &pos);
+        if (pos != cursor_str.size()) {
+            return false;  // defensive; the all-digits check makes this unreachable
+        }
+        out_cursor = static_cast<uint64_t>(parsed);
+        return true;
+    } catch (const std::exception&) {
+        return false;  // std::out_of_range (overflow) or std::invalid_argument
+    }
+}
 
 // ─── EventIngestionServiceImpl ────────────────────────────────────────────────
 
@@ -70,9 +103,18 @@ grpc::Status EventStreamServiceImpl::Subscribe(
     const SubscribeRequest* req,
     grpc::ServerWriter<CanonicalEvent>* writer) {
 
-    // TODO: parse req->cursor() as uint64 if non-empty for resume support.
-    // For now, start from the current tail.
-    uint64_t cursor = store_->CurrentCursor();
+    // Resolve the start position from the request cursor.
+    //   ""  -> live tail (CurrentCursor() is the next-unwritten index, so only
+    //          events that arrive after subscribing are delivered).
+    //   "0" -> replay the full retained history (GetSince is INCLUSIVE of the
+    //          start cursor and clamps to the oldest retained event), then live.
+    uint64_t cursor = 0;
+    if (!ResolveStartCursor(req->cursor(), store_->CurrentCursor(), cursor)) {
+        return grpc::Status(
+            grpc::StatusCode::INVALID_ARGUMENT,
+            "cursor must be empty (live tail) or a non-negative integer "
+            "ring-buffer position");
+    }
 
     while (!ctx->IsCancelled()) {
         // Block until new events or timeout (avoids busy-wait).
@@ -104,6 +146,11 @@ void RunGrpcServer(const std::string&          address,
                    std::shared_ptr<Normalizer> normalizer) {
     EventIngestionServiceImpl ingestion_svc(store, normalizer);
     EventStreamServiceImpl    stream_svc(store);
+
+    // Serve the standard gRPC health-checking protocol (grpc.health.v1.Health).
+    // The default service reports SERVING once the server is up, so probes like
+    // grpc_health_probe / Kubernetes gRPC liveness checks work out of the box.
+    grpc::EnableDefaultHealthCheckService(true);
 
     grpc::ServerBuilder builder;
     builder.AddListeningPort(address, grpc::InsecureServerCredentials());

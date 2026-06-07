@@ -36,8 +36,10 @@ public:
     // Readers should store this as their starting position.
     [[nodiscard]] uint64_t CurrentCursor() const;
 
-    // Retrieve all events since `from_cursor` (exclusive).
-    // Returns events and the new cursor position.
+    // Retrieve all events at cursors [from_cursor, write_cursor_) — INCLUSIVE of
+    // from_cursor — clamped to the oldest still-retained event if the reader has
+    // fallen more than `capacity` behind. Returns the events and the new cursor.
+    // (Subscribe relies on this: cursor "0" replays the full retained history.)
     struct ReadResult {
         std::vector<CanonicalEvent> events;
         uint64_t                   next_cursor;

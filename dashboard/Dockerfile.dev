@@ -1,0 +1,27 @@
+# Dashboard dev image — Vite dev server with HMR.
+#
+# Intended for docker-compose's `dashboard` service, which bind-mounts ./dashboard
+# over /app and keeps an ANONYMOUS volume on /app/node_modules so the deps installed
+# here survive the bind mount (host has no node_modules). Because of that mount, the
+# COPY of source below is only used for standalone `docker run`; under compose the
+# live host tree shadows it and HMR picks up edits.
+#
+# Build context is ./dashboard (see docker-compose.yml: context ./dashboard).
+FROM node:20-slim
+
+WORKDIR /app
+
+# Install deps first for layer caching. No lockfile is checked in, so use
+# `npm install` (not `npm ci`). If a package-lock.json is added later, switch to
+# `npm ci` for reproducible builds.
+COPY package.json ./
+RUN npm install
+
+# Copy the rest of the source (shadowed by the bind mount under compose).
+COPY . .
+
+EXPOSE 5173
+
+# --host 0.0.0.0 so the dev server is reachable from outside the container
+# (Vite binds 127.0.0.1 by default). Port 5173 comes from vite.config.ts.
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

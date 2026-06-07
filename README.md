@@ -388,9 +388,13 @@ Also implements `RagStreamServiceImpl` (gRPC server on `:50052`) so the gateway 
 
 #### `broadcaster.py`
 
-`asyncio.Lock`-protected `set[WebSocket]`. Fan-out: iterates all clients, sends JSON, silently removes any that raise on send.
+`asyncio.Lock`-protected `dict[WebSocket, _ClientState]`. Fan-out: iterates a snapshot of clients, sends JSON, silently removes any that raise on send.
 
-> **TODO:** buffer last 50 events for late-joining clients (reconnect replay).
+Maintains a per-stream replay buffer (`deque(maxlen=50)` for events and predictions). On connect, the buffer snapshot and client registration happen in one critical section — mutually exclusive with `broadcast()` — so a late-joining client receives recent history exactly once (replay if it predates registration, live otherwise). Replay sends happen outside the lock so a slow newcomer can't stall live fan-out.
+
+Per-client source filter: a client may send `{"action": "filter", "source": "pm" | "mma" | "all"}` to narrow its Stream-1 events to one source. Predictions (Stream 2) carry no source and are always delivered; unclassified (`SOURCE_UNKNOWN`/missing) events are never dropped.
+
+> **Note:** the gateway replays its buffer on every (re)connect, so WebSocket clients should dedup on `event_id` — the dashboard's `useEventStream` does this.
 
 #### `engine_subscriber.py` / `rag_subscriber.py`
 
@@ -532,6 +536,7 @@ Copy `.env.example` to `.env` and fill in values:
 | Variable | Required | Description |
 |---|---|---|
 | `ENGINE_GRPC_ADDRESS` | Yes | e.g. `localhost:50051` |
+| `ENGINE_RING_CAPACITY` | No | Engine ring-buffer depth. Power of 2 in `[1, 16777216]`. Default: `4096` |
 | `RAG_GRPC_ADDRESS` | Yes | e.g. `localhost:50052` |
 | `GATEWAY_WS_URL` | Dashboard | e.g. `ws://localhost:8000/ws` |
 | `GOOGLE_API_KEY` | RAG | Gemini Flash + text-embedding-004 |
@@ -558,7 +563,7 @@ docker compose up --build
 
 Then open `http://localhost:5173`.
 
-> **Note:** Dockerfiles for each service still need to be created (marked with `# TODO` in `docker-compose.yml`).
+> **Note:** Service Dockerfiles exist for `engine`, `agents`, `rag`, and `gateway`. Only `dashboard/Dockerfile.dev` remains to be created, so `docker compose up --build` currently fails at the `dashboard` service.
 
 ### Without Docker
 
@@ -654,11 +659,10 @@ npm test
 
 ## Known Limitations / TODOs
 
-- **Dockerfiles** — all 6 service Dockerfiles still need to be created (`engine/Dockerfile`, `agents/Dockerfile`, `rag/Dockerfile`, `gateway/Dockerfile`, `dashboard/Dockerfile.dev`)
-- **Proto stubs** — Python stubs in `agents/generated/` must be generated before any Python service can run (see step 1 in [Running Locally](#running-locally))
+- **All five service images build** (`engine`, `gateway`, `agents`, `rag`, `dashboard`) and the full stack has been verified end-to-end on synthetic data (both browser streams) without any external APIs — see [Running Locally](#running-locally). Real data still requires the API keys below.
+- **Proto stubs** — Python stubs in `agents/generated/` must be generated before any Python service can run (see step 1 in [Running Locally](#running-locally)); the Dockerfiles generate them automatically at image build time.
+- **External APIs required for real data** — `GOOGLE_API_KEY` + `PINECONE_API_KEY`/`PINECONE_INDEX_NAME` for RAG, and `BALLDONTLIE_API_KEY` for the MMA agent. Without them the `rag` service exits at startup and the `mma-agent` produces no events; `engine`, `gateway`, `dashboard`, and the Polymarket agent (public CLOB API, no key) run fine.
 - **MMA live stats** — `get_fight_stats()` and `get_round_stats()` raise `NotImplementedError` until the BallDontLie GOAT tier ($39.99/mo) is activated
 - **gRPC TLS** — all channels use `insecure_channel`; add TLS + auth interceptor before any public deployment
-- **Late-join replay** — `Broadcaster` does not yet buffer the last 50 events for clients that connect mid-stream (marked TODO in `broadcaster.py`)
-- **EventStore cursor resume** — `SubscribeRequest.cursor` field is defined in proto but not yet parsed in `EventStreamServiceImpl::Subscribe` (marked TODO in `grpc_server.cpp`)
+- **Cursor resume is server-side only** — `EventStreamServiceImpl::Subscribe` now parses `SubscribeRequest.cursor` (`""` = live tail, `"0"` = replay retained history), but `CanonicalEvent` carries no sequence field, so a client can't checkpoint an arbitrary mid-stream position; the gateway subscribes at live tail. Full resume needs a per-event sequence + client-side dedup on `event_id`.
 - **UUID library** — `Normalizer::GenerateUUID()` uses a minimal in-house implementation; replace with `libuuid` or `boost::uuid` in production
-- **Polymarket context manager** — `PolymarketClient` needs `__aenter__`/`__aexit__` added to `client.py` (temporary workaround exists in the API test file)
