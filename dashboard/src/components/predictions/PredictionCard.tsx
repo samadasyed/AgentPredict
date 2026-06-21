@@ -20,14 +20,12 @@ function ConfidenceBar({ confidence }: { confidence: number }) {
         : 'bg-gray-600'
 
   return (
-    <div className="flex items-center gap-2 mt-1">
-      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all ${color}`}
-          style={{ width: `${pct}%` }}
-        />
+    <div className="mt-1 flex items-center gap-2">
+      <span className="text-xs text-slate-500">Confidence</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-700">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs font-mono text-gray-400">{pct}%</span>
+      <span className="font-mono text-xs text-slate-300">{pct}%</span>
     </div>
   )
 }
@@ -36,26 +34,21 @@ export function PredictionCard({ prediction }: PredictionCardProps) {
   const ts = new Date(prediction.timestamp).toLocaleTimeString()
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 space-y-2">
-      {/* Header */}
+    <div className="space-y-2.5 rounded-xl border border-white/5 bg-slate-900/60 p-4 transition-colors hover:border-white/10">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wider text-indigo-400">
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
           AI Analysis
         </span>
-        <span className="text-xs text-gray-600 font-mono">{ts}</span>
+        <span className="font-mono text-xs text-slate-600">{ts}</span>
       </div>
 
-      {/* Explanation */}
-      <p className="text-sm text-gray-200 leading-relaxed">{prediction.explanation}</p>
+      <p className="text-sm leading-relaxed text-slate-100">{prediction.explanation}</p>
 
-      {/* Confidence */}
       <ConfidenceBar confidence={prediction.confidence} />
 
-      {/* Evidence — always shown */}
-      <div className="border-t border-gray-700 pt-2">
-        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Evidence
-        </span>
+      <div className="border-t border-white/5 pt-2.5">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Evidence</span>
         <EvidenceList evidence={prediction.evidence} />
       </div>
     </div>

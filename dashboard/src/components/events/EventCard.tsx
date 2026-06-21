@@ -20,20 +20,17 @@ function EventBody({ event }: { event: CanonicalEvent }) {
     const deltaSign = m.delta >= 0 ? '+' : ''
     const deltaPct = (m.delta * 100).toFixed(2)
     return (
-      <div className="text-sm text-gray-200">
+      <div className="text-sm text-slate-200">
         <span className="font-medium">{m.outcome}</span>
-        <span className="ml-2 text-gray-400">→</span>
-        <span className="ml-2 font-mono font-bold">{pct}%</span>
-        <span
-          className={`ml-2 font-mono text-xs ${
-            m.delta >= 0 ? 'text-green-400' : 'text-red-400'
-          }`}
-        >
-          {deltaSign}{deltaPct}%
-        </span>
-        <span className="block text-xs text-gray-500 mt-0.5 font-mono truncate">
-          {m.market_id}
-        </span>
+        <div className="mt-1 flex items-center gap-2">
+          <span className="font-mono font-bold text-white">{pct}%</span>
+          <span
+            className={`font-mono text-xs ${m.delta >= 0 ? 'text-green-400' : 'text-red-400'}`}
+          >
+            {deltaSign}{deltaPct}%
+          </span>
+          <span className="truncate font-mono text-xs text-slate-600">{m.market_id}</span>
+        </div>
       </div>
     )
   }
@@ -41,35 +38,31 @@ function EventBody({ event }: { event: CanonicalEvent }) {
   if (event.fight_event) {
     const f = event.fight_event
     return (
-      <div className="text-sm text-gray-200">
+      <div className="text-sm text-slate-200">
         <span className="font-medium">{f.fighter_name}</span>
-        <span className="mx-2 text-gray-500">·</span>
-        <span className="text-gray-300">{f.stat_type}</span>
+        <span className="mx-2 text-slate-500">·</span>
+        <span className="text-slate-300">{f.stat_type}</span>
         {f.value > 0 && (
           <span className="ml-2 font-mono font-bold text-orange-300">{f.value}</span>
         )}
-        {f.round > 0 && (
-          <span className="ml-2 text-xs text-gray-500">R{f.round}</span>
-        )}
+        {f.round > 0 && <span className="ml-2 text-xs text-slate-500">R{f.round}</span>}
       </div>
     )
   }
 
-  return <div className="text-xs text-gray-500 italic">Unknown event payload</div>
+  return <div className="text-xs italic text-slate-500">Unknown event payload</div>
 }
 
 export function EventCard({ event }: EventCardProps) {
   const ts = event.market_event?.timestamp ?? event.fight_event?.timestamp ?? event.ingested_at
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 flex gap-3 items-start">
+    <div className="flex items-start gap-3 rounded-xl border border-white/5 bg-slate-900/60 px-3.5 py-2.5 transition-colors hover:border-white/10">
       <SourceBadge source={event.source} />
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <EventBody event={event} />
       </div>
-      <span className="text-xs text-gray-600 font-mono whitespace-nowrap">
-        {formatTs(ts)}
-      </span>
+      <span className="whitespace-nowrap font-mono text-xs text-slate-600">{formatTs(ts)}</span>
     </div>
   )
 }
