@@ -552,18 +552,32 @@ Copy `.env.example` to `.env` and fill in values:
 
 ## Running Locally
 
-### With Docker Compose (recommended)
+### Offline demo — no API keys (recommended first run)
+
+Run the **entire** stack on synthetic data. The agents emit lifelike market/fight
+events and the RAG orchestrator retrieves + explains with no Pinecone/Gemini, so
+both browser streams populate within a few seconds:
+
+```bash
+make demo                 # = docker compose -f docker-compose.yml -f docker-compose.mock.yml up --build
+# podman:  make demo COMPOSE="podman compose"
+```
+
+Then open `http://localhost:5173`. This is driven by `MOCK_MODE=1` (see
+`docker-compose.mock.yml`); nothing leaves your machine.
+
+### With real APIs
 
 ```bash
 cp .env.example .env
 # fill in GOOGLE_API_KEY, PINECONE_API_KEY, BALLDONTLIE_API_KEY
+#   (Polymarket needs no key — its CLOB API is public)
 
-docker compose up --build
+make up                   # or: docker compose up --build
 ```
 
-Then open `http://localhost:5173`.
-
-> **Note:** Service Dockerfiles exist for `engine`, `agents`, `rag`, and `gateway`. Only `dashboard/Dockerfile.dev` remains to be created, so `docker compose up --build` currently fails at the `dashboard` service.
+Then open `http://localhost:5173`. All five service images
+(`engine`, `gateway`, `agents`, `rag`, `dashboard`) build out of the box.
 
 ### Without Docker
 
@@ -659,10 +673,11 @@ npm test
 
 ## Known Limitations / TODOs
 
-- **All five service images build** (`engine`, `gateway`, `agents`, `rag`, `dashboard`) and the full stack has been verified end-to-end on synthetic data (both browser streams) without any external APIs — see [Running Locally](#running-locally). Real data still requires the API keys below.
-- **Proto stubs** — Python stubs in `agents/generated/` must be generated before any Python service can run (see step 1 in [Running Locally](#running-locally)); the Dockerfiles generate them automatically at image build time.
-- **External APIs required for real data** — `GOOGLE_API_KEY` + `PINECONE_API_KEY`/`PINECONE_INDEX_NAME` for RAG, and `BALLDONTLIE_API_KEY` for the MMA agent. Without them the `rag` service exits at startup and the `mma-agent` produces no events; `engine`, `gateway`, `dashboard`, and the Polymarket agent (public CLOB API, no key) run fine.
-- **MMA live stats** — `get_fight_stats()` and `get_round_stats()` raise `NotImplementedError` until the BallDontLie GOAT tier ($39.99/mo) is activated
+- **Runs end-to-end today.** All five images (`engine`, `gateway`, `agents`, `rag`, `dashboard`) build, and `make demo` runs the whole stack on synthetic data — both browser streams populate with no external APIs (verified end-to-end). Real data is a flag-flip: populate `.env` and `make up`.
+- **Offline vs. real is one env var** — `MOCK_MODE=1` swaps each Python service's data source for an in-process synthetic one (agent mock clients + `rag/mock_components.py`). The real code paths (engine, broadcaster, verifier, agent loops) are exercised unchanged.
+- **Proto stubs** — Python stubs in `agents/generated/` must exist before any Python service runs locally (see [Running Locally](#running-locally)); the Dockerfiles generate them automatically at image build time.
+- **External APIs required for real data** — `GOOGLE_API_KEY` + `PINECONE_API_KEY`/`PINECONE_INDEX_NAME` for RAG, and `BALLDONTLIE_API_KEY` for the MMA agent (Polymarket's CLOB API needs no key). Without them the `rag` service exits at startup and the `mma-agent` produces no events; everything else still runs. None of this applies under `make demo`.
+- **MMA live stats** — `get_fight_stats()` and `get_round_stats()` raise `NotImplementedError` until the BallDontLie GOAT tier ($39.99/mo) is activated (the mock client supplies synthetic stats under `make demo`)
 - **gRPC TLS** — all channels use `insecure_channel`; add TLS + auth interceptor before any public deployment
 - **Cursor resume is server-side only** — `EventStreamServiceImpl::Subscribe` now parses `SubscribeRequest.cursor` (`""` = live tail, `"0"` = replay retained history), but `CanonicalEvent` carries no sequence field, so a client can't checkpoint an arbitrary mid-stream position; the gateway subscribes at live tail. Full resume needs a per-event sequence + client-side dedup on `event_id`.
 - **UUID library** — `Normalizer::GenerateUUID()` uses a minimal in-house implementation; replace with `libuuid` or `boost::uuid` in production

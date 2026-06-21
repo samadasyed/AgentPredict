@@ -1,11 +1,11 @@
 #include "grpc_server.hpp"
+#include "log.hpp"
 
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/health_check_service_interface.h>
 #include <algorithm>
 #include <cctype>
-#include <iostream>
 #include <stdexcept>
 
 namespace agentpredict {
@@ -81,7 +81,7 @@ grpc::Status EventIngestionServiceImpl::IngestStream(
             ++accepted;
         } else {
             ++rejected;
-            std::cerr << "[IngestStream] rejected event: " << result.error << '\n';
+            LOG_WARN("[IngestStream] rejected event: " << result.error);
         }
     }
 
@@ -160,7 +160,7 @@ void RunGrpcServer(const std::string&          address,
     // TODO: add TLS credentials and auth interceptor before production deploy.
 
     auto server = builder.BuildAndStart();
-    std::cout << "[engine] gRPC server listening on " << address << '\n';
+    LOG_INFO("gRPC server listening on " << address);
     server->Wait();
 }
 

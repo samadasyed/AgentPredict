@@ -1,0 +1,26 @@
+# Offline demo overlay — runs the ENTIRE stack on synthetic data, NO API keys.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.mock.yml up --build
+#   (or simply: `make demo`)
+#
+# MOCK_MODE=1 swaps each Python service's external data source for an in-process
+# synthetic one: the agents emit lifelike market/fight events and the RAG
+# orchestrator retrieves+explains with no Pinecone/Gemini. Poll intervals are
+# tightened so both browser streams populate within a few seconds.
+services:
+  polymarket-agent:
+    environment:
+      MOCK_MODE: "1"
+      POLYMARKET_POLL_INTERVAL_S: "3"
+
+  mma-agent:
+    environment:
+      MOCK_MODE: "1"
+      MMA_POLL_INTERVAL_S: "6"
+      # The mock MMA client supplies synthetic per-fighter stats, so exercise the
+      # GOAT-tier stat-polling path too (no real subscription involved).
+      BALLDONTLIE_GOAT_TIER: "1"
+
+  rag:
+    environment:
+      MOCK_MODE: "1"

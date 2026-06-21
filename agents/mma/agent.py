@@ -160,10 +160,19 @@ class MMAAgent:
         self._emitter.close()
 
 
+def _make_client() -> "MMAClient":
+    """Real client, or the offline synthetic source when MOCK_MODE=1 (no API needed)."""
+    if os.getenv("MOCK_MODE", "0") == "1":
+        from agents.mma.mock_client import MockMMAClient
+        logger.info("[mma-agent] MOCK_MODE on — emitting synthetic fights/stats (no API)")
+        return MockMMAClient()  # type: ignore[return-value]
+    return MMAClient()
+
+
 async def main() -> None:
     import logging
     logging.basicConfig(level=logging.INFO)
-    agent = MMAAgent()
+    agent = MMAAgent(client=_make_client())
     try:
         await agent.run()
     finally:
