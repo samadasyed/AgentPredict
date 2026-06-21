@@ -25,9 +25,18 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_S: float = float(os.getenv("POLYMARKET_POLL_INTERVAL_S", "5"))
 DELTA_THRESHOLD: float = float(os.getenv("POLYMARKET_DELTA_THRESHOLD", "0.01"))
+# Prefer markets whose question contains this keyword (e.g. "UFC"); empty = no filter.
+QUERY: str = os.getenv("POLYMARKET_QUERY", "UFC").strip()
+# Cap how many markets we price each poll (get_prices is one request per market).
+MAX_MARKETS: int = int(os.getenv("POLYMARKET_MAX_MARKETS", "30"))
 
 # Key: (market_id, token_id) → last snapshot
 _PriceCache = Dict[Tuple[str, str], PriceSnapshot]
+
+
+def _is_live(market) -> bool:
+    """True if some token is priced strictly inside (0,1) — i.e. not a resolved market."""
+    return any(0.02 < t.price < 0.98 for t in market.tokens)
 
 
 def _build_market_event(snapshot: PriceSnapshot, delta: float) -> "events_pb2.CanonicalEvent":
@@ -72,13 +81,20 @@ class PolymarketAgent:
 
     async def _poll_once(self) -> None:
         markets = await self._client.get_markets(active_only=True)
-        market_ids = [m.condition_id for m in markets]
+        live = [m for m in markets if _is_live(m)]
 
-        if not market_ids:
-            logger.debug("[polymarket-agent] no active markets found")
+        # Prefer on-theme markets (e.g. "UFC"); fall back to any live market so the
+        # feed isn't empty when no themed market is currently trading.
+        selected = [m for m in live if QUERY.lower() in m.question.lower()] if QUERY else []
+        if not selected:
+            selected = live
+        selected = selected[:MAX_MARKETS]
+
+        if not selected:
+            logger.debug("[polymarket-agent] no live markets to track")
             return
 
-        snapshots = await self._client.get_prices(market_ids)
+        snapshots = await self._client.get_prices([m.condition_id for m in selected])
 
         for snap in snapshots:
             key = (snap.market_id, snap.token_id)

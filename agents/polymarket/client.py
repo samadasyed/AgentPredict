@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://clob.polymarket.com"
 MARKET_CACHE_TTL_S: int = 300  # 5 minutes
+# `active=true` returns a huge backlog (1000+/page, many resolved). Cap how many
+# pages we pull so a poll cycle stays cheap; the agent then filters to live ones.
+_MAX_PAGES: int = int(os.getenv("POLYMARKET_MAX_PAGES", "3"))
 _DEBUG_DUMP = os.getenv("DEBUG_DUMP", "0") == "1"
 _DEBUG_DIR = Path("/tmp/polymarket_debug")
 
@@ -65,19 +68,22 @@ class PolymarketClient:
                 dump_path.write_text(json.dumps(data, indent=2))
             return data
 
-    async def get_markets(self, active_only: bool = True) -> list[Market]:
+    async def get_markets(self, active_only: bool = True, max_pages: int | None = None) -> list[Market]:
         """
-        Fetch all markets (paginates automatically).
+        Fetch markets, paginating up to `max_pages` (default _MAX_PAGES).
         Results are cached for MARKET_CACHE_TTL_S seconds.
         """
+        if max_pages is None:
+            max_pages = _MAX_PAGES
         now = time.monotonic()
         if self._market_cache and (now - self._cache_loaded_at) < MARKET_CACHE_TTL_S:
             return self._market_cache
 
         markets: list[Market] = []
         next_cursor: str | None = None
+        pages = 0
 
-        while True:
+        while pages < max_pages:
             params: dict = {}
             if next_cursor:
                 params["next_cursor"] = next_cursor
@@ -87,6 +93,7 @@ class PolymarketClient:
             raw = await self._get("/markets", params=params)
             page = MarketsPage(**raw)
             markets.extend(page.data)
+            pages += 1
 
             if not page.next_cursor:
                 break
@@ -94,7 +101,8 @@ class PolymarketClient:
 
         self._market_cache = markets
         self._cache_loaded_at = now
-        logger.info("[polymarket] fetched %d markets (cache refreshed)", len(markets))
+        logger.info("[polymarket] fetched %d markets across %d page(s) (cache refreshed)",
+                    len(markets), pages)
         return markets
 
     async def get_prices(self, market_ids: list[str]) -> list[PriceSnapshot]:
