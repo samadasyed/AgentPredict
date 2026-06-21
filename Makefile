@@ -10,10 +10,11 @@ COMPOSE ?= $(shell \
   elif command -v podman >/dev/null 2>&1 && podman compose version >/dev/null 2>&1; then echo "podman compose"; \
   fi)
 MOCK := -f docker-compose.yml -f docker-compose.mock.yml
+RUNTIME := $(shell command -v podman >/dev/null 2>&1 && echo podman || echo docker)
 
 .DEFAULT_GOAL := help
 
-.PHONY: help demo up down logs build test test-py clean
+.PHONY: help demo up down logs watch build test test-py clean
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -46,6 +47,11 @@ down:  ## Stop and remove all containers
 logs:  ## Tail logs from all services (compose) or print podman hint
 	@if [ -n "$(COMPOSE)" ]; then $(COMPOSE) logs -f; \
 	else echo "raw podman: podman logs -f ap-engine | ap-gateway | ap-rag | ap-pm | ap-mma | ap-dash"; fi
+
+watch:  ## Tail BOTH live streams in the terminal — no browser needed (Ctrl+C to quit)
+	@$(RUNTIME) run --rm --network host \
+	  -v $(PWD)/scripts/watch-stream.py:/watch.py:z \
+	  agentpredict-gateway:dev python /watch.py ws://localhost:8000/ws
 
 build:  ## Build all images without starting them
 	@if [ -n "$(COMPOSE)" ]; then $(COMPOSE) build; \
