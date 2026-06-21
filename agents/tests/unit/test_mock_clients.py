@@ -62,20 +62,24 @@ async def test_polymarket_mock_is_deterministic_with_seed():
 async def test_mma_mock_returns_in_progress_fights():
     c = MockMMAClient()
     events = await c.get_live_events()
-    assert events and events[0].fights
-    for f in events[0].fights:
+    assert events
+    fights = await c.get_fights(event_ids=[events[0].id])
+    assert fights
+    for f in fights:
         assert f.status == "in_progress"
+        assert f.fighter1 and f.fighter2
 
 
 @pytest.mark.asyncio
 async def test_mma_mock_stats_increase_each_poll():
     c = MockMMAClient()
-    fid = (await c.get_live_events())[0].fights[0].id
+    events = await c.get_live_events()
+    fid = (await c.get_fights(event_ids=[events[0].id]))[0].id
     s1 = await c.get_fight_stats(fid)
     s2 = await c.get_fight_stats(fid)
     assert s1 and s2
     assert s1[0].fighter_name  # non-empty (engine requires it)
-    assert s2[0].significant_strikes > s1[0].significant_strikes
+    assert s2[0].significant_strikes_landed > s1[0].significant_strikes_landed
 
 
 @pytest.mark.asyncio

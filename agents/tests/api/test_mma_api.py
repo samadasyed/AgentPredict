@@ -1,11 +1,12 @@
 """
-Live API tests for BallDontLie MMA client.
+Live API tests for the BallDontLie MMA client.
 
 Marked with pytest.mark.api — run with:
     pytest -m api agents/tests/api/test_mma_api.py
 
-Requires BALLDONTLIE_API_KEY in environment for authenticated endpoints.
-Free-tier tests pass without a key.
+Requires BALLDONTLIE_API_KEY in the environment. Endpoints not included in your
+plan return [] (the client maps 401/403 to an empty list), so every test asserts
+the shape rather than non-emptiness.
 """
 
 from __future__ import annotations
@@ -13,54 +14,48 @@ from __future__ import annotations
 import pytest
 
 from agents.mma.client import MMAClient
+from agents.mma.models import Event, Fight, FightStat, Fighter
 
 
 pytestmark = pytest.mark.api
 
 
 @pytest.mark.asyncio
+async def test_get_events_returns_list():
+    async with MMAClient() as client:
+        events = await client.get_events(year=2024)
+    assert isinstance(events, list)
+    assert all(isinstance(e, Event) for e in events)
+
+
+@pytest.mark.asyncio
 async def test_get_live_events_returns_list():
-    """Free tier: live events endpoint responds and returns a list (possibly empty)."""
     async with MMAClient() as client:
         events = await client.get_live_events()
     assert isinstance(events, list)
 
 
 @pytest.mark.asyncio
-async def test_get_events_returns_list():
-    """Free tier: events endpoint responds and returns a list."""
-    async with MMAClient() as client:
-        events = await client.get_events()
-    assert isinstance(events, list)
-
-
-@pytest.mark.asyncio
 async def test_get_fighters_returns_list():
-    """Free tier: fighters endpoint responds and returns a list."""
     async with MMAClient() as client:
-        fighters = await client.get_fighters()
+        fighters = await client.get_fighters(search="Jones")
     assert isinstance(fighters, list)
+    assert all(isinstance(f, Fighter) for f in fighters)
 
 
 @pytest.mark.asyncio
-async def test_get_fights_raises_not_implemented():
-    """ALL-STAR-tier method must raise NotImplementedError."""
+async def test_get_fights_returns_list():
+    """/fights is a real endpoint (no NotImplementedError); returns a list."""
     async with MMAClient() as client:
-        with pytest.raises(NotImplementedError, match="ALL-STAR tier"):
-            await client.get_fights(event_id=1)
+        fights = await client.get_fights(fighter_ids=[1])
+    assert isinstance(fights, list)
+    assert all(isinstance(f, Fight) for f in fights)
 
 
 @pytest.mark.asyncio
-async def test_get_fight_stats_raises_not_implemented():
-    """GOAT-tier method must raise NotImplementedError — never silently do nothing."""
+async def test_get_fight_stats_returns_list():
+    """/fight_stats is a real endpoint; returns a list (empty if plan-gated)."""
     async with MMAClient() as client:
-        with pytest.raises(NotImplementedError, match="GOAT tier"):
-            await client.get_fight_stats(fight_id=1)
-
-
-@pytest.mark.asyncio
-async def test_get_round_stats_raises_not_implemented():
-    """GOAT-tier method must raise NotImplementedError."""
-    async with MMAClient() as client:
-        with pytest.raises(NotImplementedError, match="GOAT tier"):
-            await client.get_round_stats(fight_id=1, round_num=1)
+        stats = await client.get_fight_stats(fight_id=1)
+    assert isinstance(stats, list)
+    assert all(isinstance(s, FightStat) for s in stats)
