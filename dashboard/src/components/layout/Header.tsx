@@ -1,5 +1,5 @@
 /**
- * Top navigation bar with live connection status indicator.
+ * Sticky top bar: brand + live connection status.
  */
 
 interface HeaderProps {
@@ -8,20 +8,25 @@ interface HeaderProps {
 
 export function Header({ connected }: HeaderProps) {
   return (
-    <header className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <span className="text-lg font-bold tracking-tight text-white">AgentPredict</span>
-        <span className="text-xs text-gray-500 font-mono">Live UFC Dashboard</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <span
-          className={`h-2 w-2 rounded-full ${
-            connected ? 'bg-green-400 animate-pulse' : 'bg-red-500'
+    <header className="sticky top-0 z-10 border-b border-white/5 bg-slate-950/80 px-6 py-4 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-sky-400 text-sm font-black text-slate-950">
+            A
+          </span>
+          <div className="leading-tight">
+            <div className="text-base font-semibold tracking-tight text-white">AgentPredict</div>
+            <div className="text-xs text-slate-500">Live UFC × Polymarket</div>
+          </div>
+        </div>
+        <div
+          className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
+            connected ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
           }`}
-        />
-        <span className={`text-xs font-mono ${connected ? 'text-green-400' : 'text-red-400'}`}>
-          {connected ? 'connected' : 'disconnected'}
-        </span>
+        >
+          <span className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
+          {connected ? 'Live' : 'Offline'}
+        </div>
       </div>
     </header>
   )
