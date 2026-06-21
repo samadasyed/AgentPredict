@@ -129,13 +129,32 @@ class RagStreamServiceImpl(events_pb2_grpc.RagStreamServicer):
 
 # ─── Main orchestrator ────────────────────────────────────────────────────────
 
+
+def _build_retriever():
+    """Pinecone-backed Retriever, or an in-memory mock when MOCK_MODE=1 (no keys)."""
+    if os.getenv("MOCK_MODE", "0") == "1":
+        from rag.mock_components import MockRetriever
+        logger.info("[orchestrator] MOCK_MODE on — using in-memory retriever (no Pinecone)")
+        return MockRetriever()
+    return Retriever()
+
+
+def _build_inference():
+    """Gemini InferenceEngine, or a templated mock when MOCK_MODE=1 (no keys)."""
+    if os.getenv("MOCK_MODE", "0") == "1":
+        from rag.mock_components import MockInference
+        logger.info("[orchestrator] MOCK_MODE on — using templated inference (no Gemini)")
+        return MockInference()
+    return InferenceEngine()
+
+
 class Orchestrator:
     """Wires together all RAG components and manages the event subscription loop."""
 
     def __init__(self) -> None:
         self._context_builder = ContextBuilder()
-        self._retriever = Retriever()
-        self._inference = InferenceEngine()
+        self._retriever = _build_retriever()
+        self._inference = _build_inference()
         self._verifier = Verifier()
         self._rag_service = RagStreamServiceImpl()
 

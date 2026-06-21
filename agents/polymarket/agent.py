@@ -100,10 +100,19 @@ class PolymarketAgent:
         self._emitter.close()
 
 
+def _make_client() -> "PolymarketClient":
+    """Real client, or the offline synthetic source when MOCK_MODE=1 (no API needed)."""
+    if os.getenv("MOCK_MODE", "0") == "1":
+        from agents.polymarket.mock_client import MockPolymarketClient
+        logger.info("[polymarket-agent] MOCK_MODE on — emitting synthetic markets (no API)")
+        return MockPolymarketClient()  # type: ignore[return-value]
+    return PolymarketClient()
+
+
 async def main() -> None:
     import logging
     logging.basicConfig(level=logging.INFO)
-    agent = PolymarketAgent()
+    agent = PolymarketAgent(client=_make_client())
     try:
         await agent.run()
     finally:

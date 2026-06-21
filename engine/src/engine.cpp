@@ -1,9 +1,9 @@
 #include "engine.hpp"
 #include "grpc_server.hpp"
+#include "log.hpp"
 
 #include <algorithm>
 #include <cctype>
-#include <iostream>
 #include <stdexcept>
 
 namespace agentpredict {
@@ -53,8 +53,8 @@ Engine::Engine(Config cfg)
     : cfg_(std::move(cfg)),
       store_(std::make_shared<EventStore>(cfg_.ring_capacity)),
       normalizer_(std::make_shared<Normalizer>()) {
-    std::cout << "[engine] initialized — ring_capacity=" << cfg_.ring_capacity
-              << " grpc=" << cfg_.grpc_address << '\n';
+    LOG_INFO("initialized — ring_capacity=" << cfg_.ring_capacity
+             << " grpc=" << cfg_.grpc_address);
 }
 
 void Engine::Run() {
