@@ -28,6 +28,7 @@ def _make_market(condition_id: str, outcome: str = "Fighter A wins", price: floa
         condition_id=condition_id,
         question="Who wins?",
         tokens=[TokenPrice(token_id="tok-1", outcome=outcome, price=price)],
+        accepting_orders=True,
     )
 
 

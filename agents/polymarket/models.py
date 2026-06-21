@@ -26,6 +26,7 @@ class Market(BaseModel):
     tokens: list[TokenPrice]
     active: bool = True
     closed: bool = False
+    accepting_orders: bool = False  # True only while the market is live & tradeable
 
     @field_validator("tokens")
     @classmethod

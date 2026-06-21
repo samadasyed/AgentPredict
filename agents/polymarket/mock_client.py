@@ -39,6 +39,7 @@ class MockPolymarketClient:
                 condition_id=cid,
                 question=outcome,
                 tokens=[TokenPrice(token_id=f"{cid}-yes", outcome=outcome, price=self._probs[cid])],
+                accepting_orders=True,
             )
             for cid, outcome, _ in _SEED_MARKETS
         ]
