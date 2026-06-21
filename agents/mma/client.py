@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://api.balldontlie.io/mma/v1"
 _API_KEY = os.getenv("BALLDONTLIE_API_KEY", "")
 _PER_PAGE = 100
+# Browser UA — some API edges reject the default aiohttp User-Agent.
+_USER_AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 
 class MMAClient:
@@ -39,7 +42,7 @@ class MMAClient:
 
     async def _session_(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            headers = {"Accept": "application/json"}
+            headers = {"Accept": "application/json", "User-Agent": _USER_AGENT}
             if self._api_key:
                 # BallDontLie expects the raw key, NOT an OAuth "Bearer <key>".
                 headers["Authorization"] = self._api_key

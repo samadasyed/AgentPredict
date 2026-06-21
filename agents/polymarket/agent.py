@@ -34,9 +34,10 @@ MAX_MARKETS: int = int(os.getenv("POLYMARKET_MAX_MARKETS", "30"))
 _PriceCache = Dict[Tuple[str, str], PriceSnapshot]
 
 
-def _is_live(market) -> bool:
-    """True if some token is priced strictly inside (0,1) — i.e. not a resolved market."""
-    return any(0.02 < t.price < 0.98 for t in market.tokens)
+def _is_tradeable(market) -> bool:
+    """True if the market is currently accepting orders (live) — Polymarket's
+    `active=true` feed also includes closed/settled markets, so filter on this."""
+    return getattr(market, "accepting_orders", False) and not market.closed
 
 
 def _build_market_event(snapshot: PriceSnapshot, delta: float) -> "events_pb2.CanonicalEvent":
@@ -81,7 +82,7 @@ class PolymarketAgent:
 
     async def _poll_once(self) -> None:
         markets = await self._client.get_markets(active_only=True)
-        live = [m for m in markets if _is_live(m)]
+        live = [m for m in markets if _is_tradeable(m)]
 
         # Prefer on-theme markets (e.g. "UFC"); fall back to any live market so the
         # feed isn't empty when no themed market is currently trading.
