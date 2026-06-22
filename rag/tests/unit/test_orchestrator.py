@@ -28,15 +28,15 @@ def _market_event(delta: float = 0.05, probability: float = 0.65) -> events_pb2.
     return ev
 
 
-def _fight_event() -> events_pb2.CanonicalEvent:
+def _fight_event(stat_type: str = "significant_strikes", value: float = 10.0) -> events_pb2.CanonicalEvent:
     ev = events_pb2.CanonicalEvent()
     ev.event_id = "fight-event-id"
     ev.source = events_pb2.SOURCE_MMA
     f = ev.fight_event
     f.fight_id = "fight-1"
     f.fighter_name = "Fighter B"
-    f.stat_type = "FIGHT_DISCOVERED"
-    f.value = 0.0
+    f.stat_type = stat_type
+    f.value = value
     f.round = 0
     f.timestamp = int(time.time() * 1000)
     return ev
@@ -51,7 +51,12 @@ def test_is_meaningful_small_delta():
     assert _is_meaningful(_market_event(delta=0.005)) is False
 
 def test_is_meaningful_fight_event():
-    assert _is_meaningful(_fight_event()) is True
+    assert _is_meaningful(_fight_event(stat_type="significant_strikes")) is True
+
+def test_is_meaningful_fight_sentinels_skipped():
+    # Schedule/discovery markers must not trigger inference (they're re-emitted).
+    assert _is_meaningful(_fight_event(stat_type="FIGHT_UPCOMING", value=0.0)) is False
+    assert _is_meaningful(_fight_event(stat_type="FIGHT_DISCOVERED", value=0.0)) is False
 
 def test_is_meaningful_zero_delta():
     assert _is_meaningful(_market_event(delta=0.0)) is False

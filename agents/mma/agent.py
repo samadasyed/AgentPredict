@@ -16,9 +16,10 @@ import asyncio
 import logging
 import os
 import time
+from datetime import date as date_cls, datetime, timezone
 
 from agents.mma.client import MMAClient
-from agents.mma.models import Fight
+from agents.mma.models import Event, Fight
 from agents.shared.event_emitter import EventEmitter
 from agents.generated import events_pb2  # type: ignore[import]
 
@@ -26,6 +27,14 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_S: float = float(os.getenv("MMA_POLL_INTERVAL_S", "30"))
 _GOAT_TIER_ENABLED: bool = os.getenv("BALLDONTLIE_GOAT_TIER", "0") == "1"
+
+# Upcoming-card discovery (works on lower tiers — /events is not plan-gated).
+# Surfaces real incoming fights with countdowns even when /fights is unavailable.
+_UPCOMING_DAYS: int = int(os.getenv("MMA_UPCOMING_DAYS", "45"))
+_UPCOMING_MAX: int = int(os.getenv("MMA_UPCOMING_MAX", "12"))
+_UPCOMING_REFRESH_S: float = float(os.getenv("MMA_UPCOMING_REFRESH_S", "600"))
+# Only surface cards whose name contains this (e.g. "UFC"); blank = all promotions.
+_PROMOTION: str = os.getenv("MMA_PROMOTION", "UFC").strip()
 
 _GOAT_TIER_NOTE = (
     "Fight-stat polling disabled (BALLDONTLIE_GOAT_TIER != 1). "
@@ -53,6 +62,51 @@ def _is_finished(status: str | None) -> bool:
 def _matchup(fight: Fight) -> str:
     names = [f.full_name for f in (fight.fighter1, fight.fighter2) if f and f.full_name]
     return " vs ".join(names) if names else "unknown"
+
+
+def _event_start_ms(event: Event) -> int:
+    """Scheduled start of a card in unix millis (main card, else the date midnight UTC)."""
+    dt = event.main_card_start_time or event.prelims_start_time
+    if dt is None:
+        d = event.date
+        if d is None:
+            return 0
+        dt = d if isinstance(d, datetime) else datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp() * 1000)
+
+
+def _event_matchup(name: str) -> str:
+    """Headline matchup from a card name: 'UFC 329: McGregor vs. Holloway 2' → 'McGregor vs. Holloway 2'."""
+    return name.split(":", 1)[1].strip() if ":" in name else name.strip()
+
+
+def _event_phase(start_ms: int, status: str | None, now_ms: int) -> str:
+    if _is_finished(status):
+        return "final"
+    if start_ms and start_ms <= now_ms:
+        return "live"
+    return "upcoming"
+
+
+def _build_fight_upcoming_event(event: Event) -> "events_pb2.CanonicalEvent":
+    """An incoming card: matchup + scheduled start, so the dashboard can show it
+    with a countdown even when per-fight data (/fights) is plan-gated."""
+    now_ms = int(time.time() * 1000)
+    start_ms = _event_start_ms(event)
+    canonical = events_pb2.CanonicalEvent()
+    canonical.source = events_pb2.SOURCE_MMA
+    f = canonical.fight_event
+    f.fight_id = str(event.id)
+    f.fighter_name = _event_matchup(event.name)
+    f.stat_type = "FIGHT_UPCOMING"
+    f.value = 0.0
+    f.round = 0
+    f.timestamp = now_ms
+    f.event_start = start_ms
+    f.phase = _event_phase(start_ms, event.status, now_ms)
+    return canonical
 
 
 def _build_fight_stat_event(
@@ -97,6 +151,8 @@ class MMAAgent:
         self._known_fight_ids: set[int] = set()
         self._completed_fight_ids: set[int] = set()
         self._last_stats: dict[tuple[int, str, str], float] = {}  # (fight_id, fighter, stat) → value
+        self._upcoming_cache: list[Event] = []
+        self._upcoming_fetched_at: float = 0.0
         if _GOAT_TIER_ENABLED:
             logger.info("[mma-agent] fight-stat polling enabled")
         else:
@@ -116,6 +172,9 @@ class MMAAgent:
             await asyncio.sleep(POLL_INTERVAL_S)
 
     async def _poll_once(self) -> None:
+        # Surface real upcoming cards first (works even when /fights is plan-gated).
+        await self._poll_upcoming()
+
         events = await self._client.get_live_events()
         if not events:
             logger.debug("[mma-agent] no events today")
@@ -136,6 +195,48 @@ class MMAAgent:
 
         if _GOAT_TIER_ENABLED:
             await self._poll_fight_stats(fights)
+
+    async def _poll_upcoming(self) -> None:
+        """Emit a FIGHT_UPCOMING event per real incoming card (re-emitted each cycle
+        so late-joining clients see them; the dashboard dedups by fight_id)."""
+        if not hasattr(self._client, "get_events"):
+            return  # client doesn't support event discovery (e.g. minimal mocks)
+
+        now = time.monotonic()
+        if not self._upcoming_cache or (now - self._upcoming_fetched_at) >= _UPCOMING_REFRESH_S:
+            await self._refresh_upcoming()
+            self._upcoming_fetched_at = now
+
+        for event in self._upcoming_cache:
+            self._emitter.emit(_build_fight_upcoming_event(event))
+
+    async def _refresh_upcoming(self) -> None:
+        """Fetch + filter upcoming cards into the cache (UFC by default, next 45d)."""
+        years = {datetime.now(timezone.utc).year}
+        if datetime.now(timezone.utc).month >= 11:
+            years.add(datetime.now(timezone.utc).year + 1)
+
+        events: list[Event] = []
+        for year in sorted(years):
+            try:
+                events.extend(await self._client.get_events(year=year))
+            except Exception as exc:  # noqa: BLE001 - discovery is best-effort
+                logger.warning("[mma-agent] upcoming events fetch failed for %d: %s", year, exc)
+
+        now_ms = int(time.time() * 1000)
+        horizon_ms = now_ms + _UPCOMING_DAYS * 86_400_000
+        floor_ms = now_ms - 86_400_000  # keep cards that started in the last 24h (live/just-finished)
+
+        def keep(ev: Event) -> bool:
+            if _PROMOTION and _PROMOTION.lower() not in (ev.name or "").lower():
+                return False
+            start = _event_start_ms(ev)
+            return bool(start) and floor_ms <= start <= horizon_ms
+
+        upcoming = sorted((e for e in events if keep(e)), key=_event_start_ms)[:_UPCOMING_MAX]
+        self._upcoming_cache = upcoming
+        logger.info("[mma-agent] tracking %d upcoming %s card(s)",
+                    len(upcoming), _PROMOTION or "MMA")
 
     async def _poll_fight_stats(self, fights: list[Fight]) -> None:
         """Poll per-fighter stats for active fights and emit changes."""

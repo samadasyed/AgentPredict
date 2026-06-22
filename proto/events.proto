@@ -35,15 +35,17 @@ message MarketEvent {
   string phase = 8;
 }
 
-// NOTE: FightStatEvent fields are fully defined so C++ compiles clean.
-// Data population is STUBBED until BallDontLie GOAT tier is enabled.
 message FightStatEvent {
-  string fight_id     = 1;   // BallDontLie fight identifier
-  string fighter_name = 2;
-  string stat_type    = 3;   // e.g. "significant_strikes", "takedowns"
+  string fight_id     = 1;   // BallDontLie fight/event identifier
+  string fighter_name = 2;   // a fighter, OR the headline matchup for schedule events
+  string stat_type    = 3;   // e.g. "significant_strikes"; sentinels: FIGHT_DISCOVERED, FIGHT_UPCOMING
   double value        = 4;   // numeric stat reading
   int32  round        = 5;   // fight round (0 = between rounds)
-  int64  timestamp    = 6;   // unix millis from source
+  int64  timestamp    = 6;   // unix millis from source (emission time)
+
+  // ── Schedule (mirrors MarketEvent; used by FIGHT_UPCOMING schedule events) ──
+  int64  event_start  = 7;   // scheduled start of the card, unix millis (0 = unknown)
+  string phase        = 8;   // "upcoming" | "live" | "final" | "" (unknown)
 }
 
 // ─── Canonical wrapper ────────────────────────────────────────────────────────

@@ -27,6 +27,9 @@ POLL_INTERVAL_S: float = float(os.getenv("POLYMARKET_POLL_INTERVAL_S", "5"))
 DELTA_THRESHOLD: float = float(os.getenv("POLYMARKET_DELTA_THRESHOLD", "0.01"))
 # Prefer markets whose question contains this keyword (e.g. "UFC"); empty = no filter.
 QUERY: str = os.getenv("POLYMARKET_QUERY", "UFC").strip()
+# When the query matches nothing, fall back to ALL live markets (off-theme). Off by
+# default so a UFC-focused view stays clean instead of showing e.g. World Cup futures.
+FALLBACK_ALL: bool = os.getenv("POLYMARKET_FALLBACK_ALL", "0") == "1"
 # Cap how many markets we price each poll (get_prices is one request per market).
 MAX_MARKETS: int = int(os.getenv("POLYMARKET_MAX_MARKETS", "30"))
 
@@ -91,15 +94,16 @@ class PolymarketAgent:
         markets = await self._client.get_markets(active_only=True)
         live = [m for m in markets if _is_tradeable(m)]
 
-        # Prefer on-theme markets (e.g. "UFC"); fall back to any live market so the
-        # feed isn't empty when no themed market is currently trading.
-        selected = [m for m in live if QUERY.lower() in m.question.lower()] if QUERY else []
-        if not selected:
+        # Prefer on-theme markets (e.g. "UFC"). Only fall back to off-theme markets
+        # when explicitly enabled — a UFC view should stay clean (and upcoming fights
+        # are surfaced from BallDontLie even when no UFC market is trading yet).
+        selected = [m for m in live if QUERY.lower() in m.question.lower()] if QUERY else live
+        if not selected and FALLBACK_ALL:
             selected = live
         selected = selected[:MAX_MARKETS]
 
         if not selected:
-            logger.debug("[polymarket-agent] no live markets to track")
+            logger.info("[polymarket-agent] no on-theme (%s) markets trading right now", QUERY or "*")
             return
 
         snapshots = await self._client.get_prices([m.condition_id for m in selected])

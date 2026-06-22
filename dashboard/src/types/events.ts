@@ -24,11 +24,13 @@ export interface MarketEvent {
 
 export interface FightStatEvent {
   fight_id: string
-  fighter_name: string
-  stat_type: string
+  fighter_name: string  // a fighter, or the headline matchup for schedule events
+  stat_type: string     // stat name; sentinels: "FIGHT_DISCOVERED", "FIGHT_UPCOMING"
   value: number
   round: number
   timestamp: number    // unix millis
+  event_start?: number  // scheduled card start, unix millis (0 = unknown)
+  phase?: string        // "upcoming" | "live" | "final" | "" (unknown)
 }
 
 export interface CanonicalEvent {

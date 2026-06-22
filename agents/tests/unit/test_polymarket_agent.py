@@ -26,7 +26,7 @@ def _make_snapshot(market_id: str, token_id: str, outcome: str, prob: float) -> 
 def _make_market(condition_id: str, outcome: str = "Fighter A wins", price: float = 0.6) -> Market:
     return Market(
         condition_id=condition_id,
-        question="Who wins?",
+        question="UFC: Who wins?",   # matches the default POLYMARKET_QUERY="UFC"
         tokens=[TokenPrice(token_id="tok-1", outcome=outcome, price=price)],
         accepting_orders=True,
     )

@@ -39,6 +39,11 @@ class MockMMAClient:
         self._takedowns: dict[tuple[int, str], int] = {}
         self._status: dict[int, str] = {fid: status for fid, _a, _b, status in _SEED_FIGHTS}
 
+    async def get_events(self, year: int | None = None, date: str | None = None) -> list[Event]:
+        # Upcoming-card discovery is driven by the Polymarket mock in MOCK_MODE
+        # (markets carry the schedule), so the MMA mock returns no scheduled events.
+        return []
+
     async def get_live_events(self) -> list[Event]:
         return [Event(id=_EVENT_ID, name="UFC 999: Mock Main Card", status="in_progress")]
 

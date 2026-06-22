@@ -9,7 +9,12 @@ interface EventFeedProps {
   events: CanonicalEvent[]
 }
 
-export function EventFeed({ events }: EventFeedProps) {
+// Schedule/discovery markers aren't factual state changes — keep them out of the feed.
+const SENTINELS = new Set(['FIGHT_UPCOMING', 'FIGHT_DISCOVERED'])
+const isSentinel = (e: CanonicalEvent) => !!e.fight_event && SENTINELS.has(e.fight_event.stat_type)
+
+export function EventFeed({ events: allEvents }: EventFeedProps) {
+  const events = allEvents.filter((e) => !isSentinel(e))
   return (
     <section className="flex flex-col rounded-2xl border border-white/5 bg-slate-900/40">
       <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">

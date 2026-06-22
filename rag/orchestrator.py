@@ -39,14 +39,18 @@ _RAG_GRPC_ADDRESS    = os.getenv("RAG_GRPC_ADDRESS", "0.0.0.0:50052")
 # Events below this are consumed by context_builder but not sent to inference.
 _MEANINGFUL_DELTA_THRESHOLD = 0.02
 
+# Schedule/discovery markers carry no analyzable change — never run inference on them
+# (they're also re-emitted periodically, which would spam the model).
+_SENTINEL_STATS = {"FIGHT_UPCOMING", "FIGHT_DISCOVERED"}
+
 
 def _is_meaningful(event: "events_pb2.CanonicalEvent") -> bool:
     """Decide whether an event warrants a full RAG inference cycle."""
     if event.HasField("market_event"):
         return abs(event.market_event.delta) >= _MEANINGFUL_DELTA_THRESHOLD
     if event.HasField("fight_event"):
-        # All fight stat events are considered meaningful (they're rare on free tier).
-        return True
+        # Real per-fighter stat changes are meaningful; sentinels are not.
+        return event.fight_event.stat_type not in _SENTINEL_STATS
     return False
 
 

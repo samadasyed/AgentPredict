@@ -155,7 +155,8 @@ export function formatSpan(fromMs: number, nowMs: number = Date.now()): string {
 
 // ─── Live fight stats (MMA FightStatEvents) ────────────────────────────────────
 
-const DISCOVERED = 'FIGHT_DISCOVERED'
+// Sentinel stat_types that are NOT real stat readings (schedule/discovery markers).
+const SENTINEL_STATS = new Set(['FIGHT_DISCOVERED', 'FIGHT_UPCOMING'])
 
 export interface FightStatUpdate {
   eventId: string
@@ -181,7 +182,7 @@ export interface LiveFight {
 }
 
 const isStat = (e: CanonicalEvent): boolean =>
-  !!e.fight_event && e.fight_event.stat_type !== DISCOVERED && !!e.fight_event.fighter_name
+  !!e.fight_event && !SENTINEL_STATS.has(e.fight_event.stat_type) && !!e.fight_event.fighter_name
 
 /** Per-update play-by-play (newest first) with per-stat deltas. */
 export function buildFightUpdates(events: CanonicalEvent[]): FightStatUpdate[] {

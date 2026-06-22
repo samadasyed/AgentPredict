@@ -4,13 +4,13 @@ Unit tests for MMA agent — mocks HTTP client and gRPC emitter.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agents.mma.agent import MMAAgent
+from agents.mma.agent import MMAAgent, _event_matchup, _event_phase
 from agents.mma.models import Event, Fight, Fighter, FightStat
 
 
@@ -107,6 +107,56 @@ async def test_multiple_fights_each_emitted_once(agent, mock_client, mock_emitte
     mock_client.get_fights.return_value = [_make_fight(301), _make_fight(302)]
     await agent._poll_once()
     assert mock_emitter.emit.call_count == 2
+
+
+# ─── upcoming-card discovery (works without GOAT tier / /fights access) ────────
+
+
+def _upcoming_event(eid: int, name: str, days_ahead: float) -> Event:
+    start = datetime.now(timezone.utc) + timedelta(days=days_ahead)
+    return Event(id=eid, name=name, date=start.date(), main_card_start_time=start)
+
+
+def test_event_matchup_helper():
+    assert _event_matchup("UFC 329: McGregor vs. Holloway 2") == "McGregor vs. Holloway 2"
+    assert _event_matchup("UFC Fight Night") == "UFC Fight Night"
+
+
+def test_event_phase_helper():
+    now = 1_000_000_000_000
+    assert _event_phase(now + 86_400_000, "scheduled", now) == "upcoming"
+    assert _event_phase(now - 60_000, "scheduled", now) == "live"
+    assert _event_phase(now - 60_000, "completed", now) == "final"
+
+
+@pytest.mark.asyncio
+async def test_poll_upcoming_emits_only_ufc_in_window(agent, mock_client, mock_emitter):
+    mock_client.get_events.return_value = [
+        _upcoming_event(10, "UFC 329: McGregor vs. Holloway 2", 5),
+        _upcoming_event(11, "PFL Austin: Eblen vs. Kasanganay 2", 5),   # not UFC → filtered
+        _upcoming_event(12, "UFC Fight Night: Far vs. Future", 999),    # beyond window → filtered
+    ]
+    await agent._poll_upcoming()
+
+    upcoming = [
+        c[0][0].fight_event for c in mock_emitter.emit.call_args_list
+        if c[0][0].fight_event.stat_type == "FIGHT_UPCOMING"
+    ]
+    assert len(upcoming) == 1
+    fe = upcoming[0]
+    assert fe.fight_id == "10"
+    assert fe.fighter_name == "McGregor vs. Holloway 2"
+    assert fe.phase == "upcoming"
+    assert fe.event_start > 0
+
+
+@pytest.mark.asyncio
+async def test_poll_upcoming_marks_started_card_live(agent, mock_client, mock_emitter):
+    mock_client.get_events.return_value = [_upcoming_event(20, "UFC Live: A vs. B", -0.01)]
+    await agent._poll_upcoming()
+    fe = mock_emitter.emit.call_args[0][0].fight_event
+    assert fe.stat_type == "FIGHT_UPCOMING"
+    assert fe.phase == "live"
 
 
 # ─── fight-stat polling (BALLDONTLIE_GOAT_TIER=1) ──────────────────────────────

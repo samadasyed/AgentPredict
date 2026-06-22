@@ -116,6 +116,15 @@ describe('live fight aggregation', () => {
     expect(findFightForOutcome(fights, "Sean O'Malley def. Merab Dvalishvili")?.fightId).toBe('f1')
     expect(findFightForOutcome(fights, 'Jon Jones def. Tom Aspinall')).toBeNull()
   })
+
+  it('ignores FIGHT_UPCOMING/FIGHT_DISCOVERED sentinels (not live fights)', () => {
+    const sentinels = newestFirst([
+      fight({ fight_id: 'sched', fighter_name: 'McGregor vs. Holloway 2', stat_type: 'FIGHT_UPCOMING', value: 0 }),
+      fight({ fight_id: 'disc', fighter_name: 'A vs B', stat_type: 'FIGHT_DISCOVERED', value: 0 }),
+    ])
+    expect(buildLiveFights(sentinels)).toHaveLength(0)
+    expect(buildFightUpdates(sentinels)).toHaveLength(0)
+  })
 })
 
 describe('formatCountdown', () => {
