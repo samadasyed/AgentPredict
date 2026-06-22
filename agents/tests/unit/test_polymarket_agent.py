@@ -55,10 +55,13 @@ def agent(mock_client, mock_emitter):
 
 
 @pytest.mark.asyncio
-async def test_first_poll_does_not_emit(agent, mock_emitter):
-    """On the first poll there is no previous price, so delta = 0 — nothing emitted."""
+async def test_first_poll_emits_baseline_snapshot(agent, mock_emitter):
+    """First sighting emits a baseline snapshot (delta 0) so the market shows up
+    in the dashboard even when nothing is moving (the pre-event case)."""
     await agent._poll_once()
-    mock_emitter.emit.assert_not_called()
+    mock_emitter.emit.assert_called_once()
+    ev = mock_emitter.emit.call_args[0][0]
+    assert ev.market_event.delta == 0.0
 
 
 @pytest.mark.asyncio

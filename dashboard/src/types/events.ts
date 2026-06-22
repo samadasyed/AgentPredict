@@ -5,12 +5,21 @@
 
 export type EventSource = 'SOURCE_UNKNOWN' | 'SOURCE_POLYMARKET' | 'SOURCE_MMA'
 
+/** One point on a market's probability trajectory (shipped as a snapshot). */
+export interface ProbabilityPoint {
+  timestamp: number    // unix millis (arrives as a string on the wire — coerce)
+  probability: number  // [0, 1]
+}
+
 export interface MarketEvent {
   market_id: string
   outcome: string
   probability: number  // [0, 1]
   delta: number        // signed change
   timestamp: number    // unix millis
+  history?: ProbabilityPoint[]  // recent trajectory (pre-event odds trend)
+  event_start?: number          // scheduled start of the fight, unix millis (0 = unknown)
+  phase?: string                // "upcoming" | "live" | "final" | "" (unknown)
 }
 
 export interface FightStatEvent {

@@ -49,6 +49,13 @@ def _build_market_event(snapshot: PriceSnapshot, delta: float) -> "events_pb2.Ca
     m.probability = snapshot.probability
     m.delta = delta
     m.timestamp = snapshot.timestamp_ms
+    m.event_start = snapshot.event_start_ms
+    m.phase = snapshot.phase
+    # Ship the recent trajectory as a snapshot (see PriceSnapshot.history).
+    for ts, prob in snapshot.history:
+        point = m.history.add()
+        point.timestamp = ts
+        point.probability = prob
     return ev
 
 
@@ -101,14 +108,24 @@ class PolymarketAgent:
             key = (snap.market_id, snap.token_id)
             prev = self._price_cache.get(key)
 
-            delta = snap.probability - (prev.probability if prev else snap.probability)
-            if abs(delta) >= DELTA_THRESHOLD:
-                ev = _build_market_event(snap, delta)
-                accepted = self._emitter.emit(ev)
-                logger.debug(
-                    "[polymarket-agent] emitted market=%s outcome=%s delta=%.4f accepted=%s",
-                    snap.market_id, snap.outcome, delta, accepted,
-                )
+            # First sighting → emit a baseline snapshot (delta 0) so the market shows
+            # up in the dashboard even when nothing is moving (the pre-event case).
+            # The RAG layer ignores |delta| < 0.02, so these baselines don't spam
+            # predictions. Afterwards, emit only on a meaningful move.
+            if prev is None:
+                ev = _build_market_event(snap, 0.0)
+                self._emitter.emit(ev)
+                logger.debug("[polymarket-agent] baseline snapshot market=%s outcome=%s",
+                             snap.market_id, snap.outcome)
+            else:
+                delta = snap.probability - prev.probability
+                if abs(delta) >= DELTA_THRESHOLD:
+                    ev = _build_market_event(snap, delta)
+                    accepted = self._emitter.emit(ev)
+                    logger.debug(
+                        "[polymarket-agent] emitted market=%s outcome=%s delta=%.4f accepted=%s",
+                        snap.market_id, snap.outcome, delta, accepted,
+                    )
 
             self._price_cache[key] = snap
 

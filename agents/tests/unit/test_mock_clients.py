@@ -46,6 +46,24 @@ async def test_polymarket_mock_only_returns_requested_ids():
 
 
 @pytest.mark.asyncio
+async def test_polymarket_mock_snapshots_carry_history_and_schedule():
+    """Pre-event context: each snapshot ships a week of history, a scheduled
+    start, and a phase — and exactly one fight on the card is live."""
+    c = MockPolymarketClient(seed=7)
+    ids = [m.condition_id for m in await c.get_markets()]
+    snaps = await c.get_prices(ids)
+    assert snaps
+    for s in snaps:
+        assert len(s.history) >= 2
+        assert all(0.0 <= p <= 1.0 for _ts, p in s.history)
+        # history is chronological (oldest first)
+        assert [ts for ts, _ in s.history] == sorted(ts for ts, _ in s.history)
+        assert s.event_start_ms > 0
+        assert s.phase in {"upcoming", "live"}
+    assert sum(1 for s in snaps if s.phase == "live") == 1
+
+
+@pytest.mark.asyncio
 async def test_polymarket_mock_is_deterministic_with_seed():
     a = MockPolymarketClient(seed=42)
     b = MockPolymarketClient(seed=42)
@@ -59,27 +77,36 @@ async def test_polymarket_mock_is_deterministic_with_seed():
 # ─── MockMMAClient ────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_mma_mock_returns_in_progress_fights():
+async def test_mma_mock_card_has_live_and_scheduled_fights():
+    """The card mixes one live fight with scheduled ones — the lifecycle story."""
     c = MockMMAClient()
     events = await c.get_live_events()
     assert events
     fights = await c.get_fights(event_ids=[events[0].id])
     assert fights
     for f in fights:
-        assert f.status == "in_progress"
         assert f.fighter1 and f.fighter2
+    statuses = {f.status for f in fights}
+    assert "in_progress" in statuses   # at least one live fight
+    assert "scheduled" in statuses     # at least one upcoming fight
 
 
 @pytest.mark.asyncio
-async def test_mma_mock_stats_increase_each_poll():
+async def test_mma_mock_only_live_fight_emits_stats():
+    """Live (in_progress) fights tick stats; scheduled fights produce none."""
     c = MockMMAClient()
     events = await c.get_live_events()
-    fid = (await c.get_fights(event_ids=[events[0].id]))[0].id
-    s1 = await c.get_fight_stats(fid)
-    s2 = await c.get_fight_stats(fid)
+    fights = await c.get_fights(event_ids=[events[0].id])
+    live = next(f for f in fights if f.status == "in_progress")
+    scheduled = next(f for f in fights if f.status == "scheduled")
+
+    s1 = await c.get_fight_stats(live.id)
+    s2 = await c.get_fight_stats(live.id)
     assert s1 and s2
     assert s1[0].fighter_name  # non-empty (engine requires it)
     assert s2[0].significant_strikes_landed > s1[0].significant_strikes_landed
+
+    assert await c.get_fight_stats(scheduled.id) == []  # scheduled → no live stats
 
 
 @pytest.mark.asyncio

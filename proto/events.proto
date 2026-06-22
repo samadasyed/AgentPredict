@@ -6,12 +6,33 @@ option go_package = "github.com/agentpredict/proto;agentpredict";
 
 // ─── Primitive event types ───────────────────────────────────────────────────
 
+// One point on a market's probability trajectory. Used to ship the recent
+// history of a market (e.g. the last week) alongside a live reading.
+message ProbabilityPoint {
+  int64  timestamp   = 1;    // unix millis
+  double probability = 2;    // implied probability [0, 1]
+}
+
 message MarketEvent {
   string market_id = 1;      // Polymarket market/outcome ID
   string outcome   = 2;      // e.g. "Fighter A wins"
   double probability = 3;    // current implied probability [0, 1]
   double delta     = 4;      // change since last reading (signed)
-  int64  timestamp = 5;      // unix millis from source
+  int64  timestamp = 5;      // unix millis from source (emission time)
+
+  // ── Pre-event context ───────────────────────────────────────────────────
+  // The recent probability trajectory, carried as a SNAPSHOT on the current
+  // reading. The engine's clock-skew guard validates only `timestamp` (the
+  // emission time, ≈now), so history points dated days ago pass through fine.
+  repeated ProbabilityPoint history = 6;
+
+  // Scheduled start of the underlying event (the fight), unix millis.
+  // 0 means unknown / not a scheduled event.
+  int64  event_start = 7;
+
+  // Lifecycle phase of the underlying event:
+  //   "upcoming" | "live" | "final"  ("" = unknown)
+  string phase = 8;
 }
 
 // NOTE: FightStatEvent fields are fully defined so C++ compiles clean.
