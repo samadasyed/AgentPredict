@@ -26,7 +26,7 @@ def _make_snapshot(market_id: str, token_id: str, outcome: str, prob: float) -> 
 def _make_market(condition_id: str, outcome: str = "Fighter A wins", price: float = 0.6) -> Market:
     return Market(
         condition_id=condition_id,
-        question="Who wins?",
+        question="UFC: Who wins?",   # matches the default POLYMARKET_QUERY="UFC"
         tokens=[TokenPrice(token_id="tok-1", outcome=outcome, price=price)],
         accepting_orders=True,
     )
@@ -55,10 +55,13 @@ def agent(mock_client, mock_emitter):
 
 
 @pytest.mark.asyncio
-async def test_first_poll_does_not_emit(agent, mock_emitter):
-    """On the first poll there is no previous price, so delta = 0 — nothing emitted."""
+async def test_first_poll_emits_baseline_snapshot(agent, mock_emitter):
+    """First sighting emits a baseline snapshot (delta 0) so the market shows up
+    in the dashboard even when nothing is moving (the pre-event case)."""
     await agent._poll_once()
-    mock_emitter.emit.assert_not_called()
+    mock_emitter.emit.assert_called_once()
+    ev = mock_emitter.emit.call_args[0][0]
+    assert ev.market_event.delta == 0.0
 
 
 @pytest.mark.asyncio

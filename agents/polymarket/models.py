@@ -27,6 +27,10 @@ class Market(BaseModel):
     active: bool = True
     closed: bool = False
     accepting_orders: bool = False  # True only while the market is live & tradeable
+    # Scheduled start of the underlying event (fight), unix millis. 0 = unknown.
+    event_start_ms: int = 0
+    # Lifecycle: "upcoming" | "live" | "final" | "" (unknown).
+    phase: str = ""
 
     @field_validator("tokens")
     @classmethod
@@ -53,3 +57,11 @@ class PriceSnapshot(BaseModel):
     outcome: str
     probability: float
     timestamp_ms: int  # unix millis at time of snapshot
+    # Recent probability trajectory as (timestamp_ms, probability) pairs, oldest
+    # first. Carried so the dashboard can render history without back-dated events
+    # (the engine rejects events whose timestamp is >60s from now).
+    history: list[tuple[int, float]] = []
+    # Scheduled start of the underlying event (fight), unix millis. 0 = unknown.
+    event_start_ms: int = 0
+    # Lifecycle: "upcoming" | "live" | "final" | "" (unknown).
+    phase: str = ""

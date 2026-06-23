@@ -14,12 +14,16 @@ from __future__ import annotations
 from agents.mma.models import Event, Fight, Fighter, FightStat
 
 _EVENT_ID = 900
-# (fight_id, fighter1 name, fighter2 name)
+# (fight_id, fighter1, fighter2, status). Only the live fight ("in_progress")
+# emits stats; the others are "scheduled" — they appear as upcoming fights but
+# produce no live play-by-play yet. Names match the Polymarket mock card so the
+# dashboard can fuse market odds with live fight stats.
 _SEED_FIGHTS = [
-    (5001, "Jon Jones", "Tom Aspinall"),
-    (5002, "Alex Pereira", "Magomed Ankalaev"),
-    (5003, "Sean O'Malley", "Merab Dvalishvili"),
+    (5001, "Jon Jones", "Tom Aspinall", "scheduled"),
+    (5002, "Alex Pereira", "Magomed Ankalaev", "scheduled"),
+    (5003, "Sean O'Malley", "Merab Dvalishvili", "in_progress"),
 ]
+_LIVE_STATUSES = {"in_progress", "live"}
 
 
 def _fighter(fid: int, name: str) -> Fighter:
@@ -33,6 +37,12 @@ class MockMMAClient:
         # Per (fight_id, fighter) running totals, advanced on each stats poll.
         self._strikes: dict[tuple[int, str], int] = {}
         self._takedowns: dict[tuple[int, str], int] = {}
+        self._status: dict[int, str] = {fid: status for fid, _a, _b, status in _SEED_FIGHTS}
+
+    async def get_events(self, year: int | None = None, date: str | None = None) -> list[Event]:
+        # Upcoming-card discovery is driven by the Polymarket mock in MOCK_MODE
+        # (markets carry the schedule), so the MMA mock returns no scheduled events.
+        return []
 
     async def get_live_events(self) -> list[Event]:
         return [Event(id=_EVENT_ID, name="UFC 999: Mock Main Card", status="in_progress")]
@@ -41,17 +51,19 @@ class MockMMAClient:
         return [
             Fight(
                 id=fid,
-                status="in_progress",
-                scheduled_rounds=3,
+                status=status,
+                scheduled_rounds=5 if fid == 5003 else 3,
                 fighter1=_fighter(fid * 10, a),
                 fighter2=_fighter(fid * 10 + 1, b),
             )
-            for fid, a, b in _SEED_FIGHTS
+            for fid, a, b, status in _SEED_FIGHTS
         ]
 
     async def get_fight_stats(self, fight_id: int) -> list[FightStat]:
-        """Return evolving aggregate stats for both fighters in a fight."""
-        names = next(((a, b) for fid, a, b in _SEED_FIGHTS if fid == fight_id), None)
+        """Evolving aggregate stats — only for the live (in_progress) fight."""
+        if self._status.get(fight_id) not in _LIVE_STATUSES:
+            return []  # scheduled/finished fights have no live stats
+        names = next(((a, b) for fid, a, b, _s in _SEED_FIGHTS if fid == fight_id), None)
         if names is None:
             return []
         out: list[FightStat] = []
