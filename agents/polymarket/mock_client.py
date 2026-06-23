@@ -28,12 +28,16 @@ _DAY_S = 86_400
 _HISTORY_POINTS = 56          # ~8 readings/day over the last week
 _HISTORY_SPAN_S = 7 * _DAY_S
 
+# A full demo card: one live main event + a stacked slate of upcoming fights with
+# staggered countdowns. Names match the MMA mock so live odds fuse with live stats.
 # (condition_id, outcome "A def. B", seed probability, phase, start offset seconds)
 #   offset < 0 → already started (live);  offset > 0 → upcoming.
 _SEED_MARKETS = [
-    ("0xufc-jones-aspinall", "Jon Jones def. Tom Aspinall", 0.58, "upcoming", 2 * _DAY_S),
-    ("0xufc-pereira-ankalaev", "Alex Pereira def. Magomed Ankalaev", 0.47, "upcoming", 5 * _DAY_S),
-    ("0xufc-omalley-dvalishvili", "Sean O'Malley def. Merab Dvalishvili", 0.52, "live", -12 * 60),
+    ("0xufc-jones-aspinall", "Jon Jones def. Tom Aspinall", 0.55, "live", -15 * 60),
+    ("0xufc-makhachev-tsarukyan", "Islam Makhachev def. Arman Tsarukyan", 0.68, "upcoming", 6 * 3600),
+    ("0xufc-pereira-ankalaev", "Alex Pereira def. Magomed Ankalaev", 0.47, "upcoming", 2 * _DAY_S),
+    ("0xufc-omalley-dvalishvili", "Sean O'Malley def. Merab Dvalishvili", 0.44, "upcoming", 5 * _DAY_S),
+    ("0xufc-topuria-holloway", "Ilia Topuria def. Max Holloway", 0.61, "upcoming", 9 * _DAY_S),
 ]
 
 
@@ -86,7 +90,9 @@ class MockPolymarketClient:
     def _market(self, cid: str, outcome: str) -> Market:
         return Market(
             condition_id=cid,
-            question=outcome,
+            # "UFC" in the question so the default POLYMARKET_QUERY="UFC" filter keeps
+            # it; the clean "A def. B" outcome is what the dashboard displays.
+            question=f"UFC: {outcome}?",
             tokens=[TokenPrice(token_id=f"{cid}-yes", outcome=outcome, price=self._probs[cid])],
             accepting_orders=True,
             event_start_ms=self._event_start_ms[cid],
