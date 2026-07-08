@@ -8,7 +8,9 @@ with networking works**, so everything builds and runs in containers.
 
 ```bash
 scripts/run-stack.sh mock          # synthetic demo data, no API keys
-scripts/run-stack.sh real          # real APIs, needs populated .env
+scripts/run-stack.sh real          # real APIs, needs populated .env (dev dashboard)
+scripts/run-stack.sh prod          # real APIs + production dashboard (nginx :8080,
+                                   #   single origin, gateway internal) — see DEPLOY.md
 scripts/stop-stack.sh              # tear down containers + network
 ```
 
@@ -66,7 +68,7 @@ Also update the TS mirror types in `dashboard/src/types/events.ts` by hand.
 
 ## Tests
 
-### Python (agents + rag + gateway) — host venv, currently 77 tests
+### Python (agents + rag + gateway) — host venv, currently 109 tests
 ```bash
 python3 -m venv .venv-test   # once; self-gitignores
 .venv-test/bin/pip install pytest pytest-asyncio pytest-mock fastapi aiohttp \
@@ -84,7 +86,7 @@ podman exec ap-engine bash -lc \
    cd /app/engine/build && ctest --output-on-failure'
 ```
 
-### Dashboard — 39 vitest tests + tsc, in a node container (no host node)
+### Dashboard — 42 vitest tests + tsc, in a node container (no host node)
 ```bash
 podman run --rm -v "$PWD/dashboard":/app:z -w /app node:20-slim bash -c \
   'npm install --no-audit --no-fund >/dev/null && npx vitest run && npx tsc --noEmit'

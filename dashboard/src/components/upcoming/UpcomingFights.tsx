@@ -12,8 +12,8 @@ import { parseFighters, formatCountdown, formatSpan } from '../../lib/marketSeri
 import { ProbabilityChart } from '../featured/ProbabilityChart'
 
 function FightCard({ f }: { f: UpcomingFight }) {
-  const fighters = parseFighters(f.matchup)
   const m = f.market
+  const favorite = m?.outcome || parseFighters(f.matchup)?.[0] || null
   const up = (m?.latest.delta ?? 0) >= 0
   const isLive = f.phase === 'live'
 
@@ -37,12 +37,15 @@ function FightCard({ f }: { f: UpcomingFight }) {
       <p className="mt-2 truncate text-sm font-semibold text-slate-100" title={f.matchup}>
         {f.matchup}
       </p>
+      {m?.fightInfo && (
+        <p className="truncate text-[11px] text-slate-500">{m.fightInfo}</p>
+      )}
 
       {m ? (
         <>
           <div className="mt-1 flex items-baseline gap-2 text-xs text-slate-400">
             <span className="text-2xl font-bold text-white">{(m.latest.probability * 100).toFixed(0)}%</span>
-            {fighters && <span className="truncate">{fighters[0]}</span>}
+            {favorite && <span className="truncate">{favorite}</span>}
           </div>
           <div className="mt-2 h-12">
             <ProbabilityChart points={m.points} up={up} height={48} />
@@ -60,18 +63,39 @@ function FightCard({ f }: { f: UpcomingFight }) {
   )
 }
 
+/** Group fights by card (UFC 329, UFC Fight Night, …), preserving soonest-first
+ * order. Fights with no known card land in a trailing "More scheduled" group. */
+function groupByCard(fights: UpcomingFight[]): [string, UpcomingFight[]][] {
+  const groups = new Map<string, UpcomingFight[]>()
+  for (const f of fights) {
+    const key = f.cardTitle || ''
+    const arr = groups.get(key)
+    if (arr) arr.push(f)
+    else groups.set(key, [f])
+  }
+  const entries = [...groups.entries()]
+  // Known cards in first-seen (soonest) order; the untitled bucket last.
+  entries.sort((a, b) => (a[0] === '' ? 1 : 0) - (b[0] === '' ? 1 : 0))
+  return entries
+}
+
 export function UpcomingFights({ fights }: { fights: UpcomingFight[] }) {
   if (fights.length === 0) return null
+  const groups = groupByCard(fights)
   return (
-    <section>
-      <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-slate-500">
-        Upcoming Fights
-      </h2>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {fights.map((f) => (
-          <FightCard key={f.id} f={f} />
-        ))}
-      </div>
+    <section className="space-y-4">
+      {groups.map(([card, cardFights]) => (
+        <div key={card || '(uncarded)'}>
+          <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-slate-500">
+            {card ? `${card} · Fight Card` : 'More Scheduled Fights'}
+          </h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {cardFights.map((f) => (
+              <FightCard key={f.id} f={f} />
+            ))}
+          </div>
+        </div>
+      ))}
     </section>
   )
 }

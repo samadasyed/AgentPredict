@@ -1,13 +1,44 @@
 # AgentPredict — Project Handoff
 
-Written 2026-07-08. This directory is the **current-state** snapshot of the project —
-everything needed to pick the work back up. (The older `agentdocs/` are the original
-June-3 skeleton specs and are stale; trust these files where they disagree.)
+Written 2026-07-08 (updated same day for the production build-out). This directory
+is the **current-state** snapshot of the project — everything needed to pick the
+work back up. (The older `agentdocs/` are the original June-3 skeleton specs and
+are stale; trust these files where they disagree.)
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — how the system fits together, the data
   contracts, and the non-obvious constraints that shaped the design.
 - **[RUNBOOK.md](RUNBOOK.md)** — how to build, run, test, debug, and switch between
   mock and real modes on this machine.
+- **[DEPLOY.md](DEPLOY.md)** — hosting the production stack at agentpredictufc.com.
+
+## Production build-out (2026-07-08)
+
+The stack is now a **final product** aimed at agentpredictufc.com:
+
+- **Polymarket discovery is events-by-tag**: `/events?tag_slug=ufc` → one Market
+  per listed fight (the winner moneyline), carrying matchup `title`, `card_title`
+  ("UFC 329"), `fight_info` ("Welterweight · Main Card"), and `volume`. Futures
+  ("champion at end of 2026", "who fights next") are rejected by title shape;
+  stale leftovers (started >12h ago, never closed) are dropped. UFC 329 (Jul 11,
+  Holloway vs. McGregor 2 + 14 more fights) flows end-to-end with real odds and
+  week-long price histories.
+- **Wire contract**: `MarketEvent` fields 9–12 = title/card_title/fight_info/volume;
+  `outcome` is now ONE fighter's name (probability = that fighter's win prob);
+  the matchup lives in `title`. The dashboard renders matchups, groups upcoming
+  fights by card, and headlines the highest-volume market of the soonest card.
+- **RAG is production-gated**: per-market cooldown (`RAG_MARKET_COOLDOWN_S`=90),
+  single-flight inference in a worker thread (async engine stream), hourly
+  Pinecone upsert budget, Gemini safety-block handling, percent-confidence
+  parsing, token-based verifier (surnames pass), and only PASSED verifications
+  are broadcast. Retrieval queries use the full fight description.
+- **Gateway is hardened**: honest `/health` (503 + reasons when a subscriber is
+  down or the engine stream is silent), gRPC keepalives everywhere, `/ws` origin
+  allowlist (`GATEWAY_ALLOWED_ORIGINS`) + client cap, concurrent fan-out with
+  one serialization per message, dead sockets actively closed.
+- **Production packaging**: `dashboard/Dockerfile` (static Vite build + nginx
+  serving the SPA and proxying `/ws`+`/health` to the gateway — single origin,
+  auto `wss://`), `docker-compose.prod.yml` (only :80 public, restart: always),
+  `scripts/run-stack.sh prod` (nginx on :8080 for rootless podman).
 
 ---
 
@@ -21,22 +52,27 @@ lifecycle: browse **upcoming** fights up to a week+ out (countdowns + a week of 
 history), then when a fight goes **live**, watch odds swing alongside a play-by-play
 of strikes/takedowns/knockdowns.
 
-## Current status (2026-07-08)
+## Current status (2026-07-08, post build-out)
 
-- **Everything is built and working end-to-end** in both mock and real modes.
+- **The final product runs on REAL data end-to-end** — no mock anywhere in the
+  serving path (mock mode remains for offline demos/tests).
 - **Branch:** `samad` (commits are made here, not `main`; **not pushed** — Samad
-  decides when to push). Latest commits:
-  - `b31b3fe` Richer demo mock: full UFC card (live main event + stacked upcoming slate)
-  - `1788ccc` Real upcoming-fight discovery from BallDontLie; UFC-focused real mode
-  - `b59be23` Add fight-card lifecycle: pre-event odds story + live fight tracker
-- **The stack was left RUNNING in MOCK mode** (demo for friends): dashboard on
-  `localhost:5173`, gateway on `localhost:8000`. From a laptop:
+  decides when to push).
+- **The stack is RUNNING in REAL mode**: dashboard on `localhost:5173`, gateway
+  on `localhost:8000`. From a laptop:
   `ssh -N -L 5173:localhost:5173 -L 8000:localhost:8000 samad@100.91.26.104`
-- **Test baseline (all green):** 47 C++ engine tests, 77 Python tests
-  (agents + rag + gateway), 39 dashboard vitest tests, `tsc` clean.
-- **Real mode verified live:** 5 real upcoming UFC cards flowing from BallDontLie
-  with real countdowns; Polymarket agent correctly reports "no on-theme (UFC)
-  markets trading right now" when nothing is listed (expected — see below).
+- **Test baseline (all green):** 47 C++ engine tests, 109 Python tests
+  (agents + rag + gateway), 42 dashboard vitest tests, `tsc` clean.
+- **Verified live against real APIs (2026-07-08):** 27 Polymarket fight markets
+  (all 15 UFC 329 fights incl. Holloway–McGregor at $2.0M volume, 12 UFC Fight
+  Night fights), every one with matchup/card/segment metadata and a 57-point
+  week-long price history; 6 upcoming cards from BallDontLie; a real
+  Gemini+Pinecone prediction generated, verified, and delivered over the WS
+  (grounded and honest — it declined to invent a cause for a quiet-market move);
+  the production nginx image serving the SPA and proxying /ws + /health.
+- **Known API drift handled:** Gamma's bare `/events` and `/markets` are marked
+  deprecated (Sunset already passed) — fight discovery uses `/events/pagination`;
+  CLOB `prices-history` now requires `fidelity` (≥5 min for the 1w range).
 
 ## Decisions Samad has made (don't re-litigate)
 
@@ -63,11 +99,12 @@ of strikes/takedowns/knockdowns.
 
 ## Likely next steps (nothing is in-flight)
 
-- Flip back to real mode when demoing is done:
-  `scripts/stop-stack.sh && RUNTIME=podman scripts/run-stack.sh real`
+- **Host it**: follow [DEPLOY.md](DEPLOY.md) — DNS for agentpredictufc.com, TLS
+  in front, `docker-compose.prod.yml` (or `scripts/run-stack.sh prod` here).
+- **UFC 329 fight night (Jul 11)** is the natural live validation: phases flip
+  `upcoming → live`, odds swing, RAG explains them (cooldown-gated, one
+  explanation per market per 90s).
 - If Samad upgrades BallDontLie to GOAT tier: set `BALLDONTLIE_GOAT_TIER=1` in
-  `.env` — live stats polling and the Live Fight Tracker should work with no code
+  `.env` — live stats polling and the Live Fight Tracker light up with no code
   changes (mock mode already exercises that whole path).
 - Push `samad` branch / open a PR to `main` — only when Samad asks.
-- A real UFC event weekend is the natural end-to-end validation: Polymarket
-  markets appear, phases flip `upcoming → live`, RAG explains the swings.

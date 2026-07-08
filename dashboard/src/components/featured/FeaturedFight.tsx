@@ -11,9 +11,19 @@
 
 import type { MarketSeries } from '../../lib/marketSeries'
 import type { LiveFight } from '../../lib/marketSeries'
-import { parseFighters, formatCountdown, formatSpan } from '../../lib/marketSeries'
+import { matchupFor, parseFighters, formatCountdown, formatSpan } from '../../lib/marketSeries'
 import { ProbabilityChart } from './ProbabilityChart'
 import { STAT_LABELS, formatStatValue } from '../live/statLabels'
+
+/** Surname-insensitive check that `name` refers to the same person as `fighter`. */
+const sameFighter = (name: string, fighter: string): boolean => {
+  const hay = fighter.toLowerCase()
+  return name
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 2)
+    .some((t) => hay.includes(t))
+}
 
 function DeltaPill({ delta }: { delta: number }) {
   const up = delta >= 0
@@ -104,7 +114,14 @@ export function FeaturedFight({ series, liveFight }: { series: MarketSeries; liv
   const { latest, points, outcome, phase } = series
   const pct = (latest.probability * 100).toFixed(1)
   const up = latest.delta >= 0
-  const fighters = parseFighters(outcome)
+  const matchup = matchupFor(series)
+  let fighters = parseFighters(matchup)
+  // `probability` tracks `outcome` (one fighter). Keep the odds bar's left side
+  // aligned with that fighter even if the title names them second.
+  if (fighters && !sameFighter(outcome, fighters[0]) && sameFighter(outcome, fighters[1])) {
+    fighters = [fighters[1], fighters[0]]
+  }
+  const context = [series.cardTitle, series.fightInfo].filter(Boolean).join(' · ')
   const isLive = phase === 'live'
 
   const chartLabel = isLive
@@ -123,12 +140,15 @@ export function FeaturedFight({ series, liveFight }: { series: MarketSeries; liv
         {/* Story side */}
         <div className="flex flex-col">
           <PhaseChip series={series} />
-          <h2 className="mt-2 text-2xl font-semibold leading-snug text-white">{outcome}</h2>
+          <h2 className="mt-2 text-2xl font-semibold leading-snug text-white">{matchup}</h2>
+          {context && <p className="mt-1 text-sm text-slate-400">{context}</p>}
 
           <div className="mt-auto pt-6">
             <div className="flex items-end gap-3">
               <span className="text-6xl font-bold tracking-tight text-white">{pct}%</span>
-              <span className="pb-2 text-sm text-slate-400">implied</span>
+              <span className="pb-2 text-sm text-slate-400">
+                {series.title ? `${outcome} to win` : 'implied'}
+              </span>
               <span className="ml-auto pb-2"><DeltaPill delta={latest.delta} /></span>
             </div>
             {fighters && <OddsBar a={fighters[0]} b={fighters[1]} pa={latest.probability} />}
@@ -140,7 +160,9 @@ export function FeaturedFight({ series, liveFight }: { series: MarketSeries; liv
         <div className="flex flex-col">
           <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
             <span className="uppercase tracking-widest">{chartLabel}</span>
-            <span className="font-mono">{series.marketId}</span>
+            <span className="truncate pl-2 font-mono" title={series.marketId}>
+              {series.cardTitle || series.marketId}
+            </span>
           </div>
           <div className="h-48 flex-1">
             <ProbabilityChart points={points} up={up} showAxis />

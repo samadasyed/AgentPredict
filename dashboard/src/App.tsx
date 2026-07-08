@@ -16,6 +16,7 @@ import {
   buildLiveFights,
   buildFightUpdates,
   findFightForOutcome,
+  matchupFor,
 } from './lib/marketSeries'
 import { buildUpcomingFights } from './lib/fights'
 
@@ -30,7 +31,7 @@ export default function App() {
   const liveFights = useMemo(() => buildLiveFights(events), [events])
   const fightUpdates = useMemo(() => buildFightUpdates(events), [events])
   const featuredFight = useMemo(
-    () => (featured ? findFightForOutcome(liveFights, featured.outcome) : null),
+    () => (featured ? findFightForOutcome(liveFights, matchupFor(featured)) : null),
     [featured, liveFights],
   )
 

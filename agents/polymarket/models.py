@@ -31,6 +31,11 @@ class Market(BaseModel):
     event_start_ms: int = 0
     # Lifecycle: "upcoming" | "live" | "final" | "" (unknown).
     phase: str = ""
+    # ── Fight metadata (from the Gamma event object; empty for non-fight markets) ──
+    title: str = ""        # headline matchup, e.g. "Max Holloway vs. Conor McGregor"
+    card_title: str = ""   # the card, e.g. "UFC 329" / "UFC Fight Night"
+    fight_info: str = ""   # e.g. "Welterweight · Main Card"
+    volume: float = 0.0    # event volume (USDC) — proxy for fight prominence
 
     @field_validator("tokens")
     @classmethod
@@ -65,3 +70,8 @@ class PriceSnapshot(BaseModel):
     event_start_ms: int = 0
     # Lifecycle: "upcoming" | "live" | "final" | "" (unknown).
     phase: str = ""
+    # Fight metadata mirrored from Market (see Market for field docs).
+    title: str = ""
+    card_title: str = ""
+    fight_info: str = ""
+    volume: float = 0.0

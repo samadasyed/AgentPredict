@@ -33,6 +33,12 @@ message MarketEvent {
   // Lifecycle phase of the underlying event:
   //   "upcoming" | "live" | "final"  ("" = unknown)
   string phase = 8;
+
+  // ── Fight metadata (display context; from Polymarket UFC event objects) ──
+  string title      = 9;   // headline matchup, e.g. "Max Holloway vs. Conor McGregor"
+  string card_title = 10;  // the card it's on, e.g. "UFC 329" or "UFC Fight Night"
+  string fight_info = 11;  // extra context, e.g. "Welterweight · Main Card"
+  double volume     = 12;  // market volume (USDC) — proxy for fight prominence
 }
 
 message FightStatEvent {

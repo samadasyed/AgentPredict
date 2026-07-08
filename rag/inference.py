@@ -25,15 +25,39 @@ _GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 _MODEL_NAME     = "gemini-2.5-flash"
 
 _SYSTEM_PROMPT = """\
-You are a live UFC / Polymarket trading analyst. Your job is to explain, \
-in plain language, why betting market odds have shifted during a live UFC fight.
+You are a UFC betting-market analyst for AgentPredict. Your job is to explain, \
+in plain language for fight fans, why a Polymarket fight market's odds are \
+where they are — both in the days before a fight (line moves from news, \
+weigh-ins, sharp money) and live during a fight (damage, takedowns, momentum).
 
 Rules:
-- Write 2–3 sentences maximum.
+- Write 2–3 sentences maximum, referring to fighters by name.
 - Base your explanation ONLY on the event data and evidence provided.
-- Do NOT speculate beyond the data.
+- If the data doesn't support a causal story, say the move looks like normal \
+market noise or repricing — do NOT invent injuries, news, or fight action.
 - End your response with a single line: CONFIDENCE: <float between 0.0 and 1.0>
 """
+
+
+def describe_trigger(trigger_event: "events_pb2.CanonicalEvent") -> str:
+    """Human-readable one-liner for the event that triggered this RAG cycle.
+    Shared with the retriever so the query text matches what we explain."""
+    if trigger_event.HasField("market_event"):
+        m = trigger_event.market_event
+        fight = m.title or m.outcome
+        card = f" on {m.card_title}" if m.card_title else ""
+        info = f" ({m.fight_info})" if m.fight_info else ""
+        phase = f" [{m.phase}]" if m.phase else ""
+        return (
+            f"{fight}{card}{info}{phase}: '{m.outcome}' win probability moved "
+            f"from {m.probability - m.delta:.1%} to {m.probability:.1%} "
+            f"(delta {m.delta:+.1%})."
+        )
+    f = trigger_event.fight_event
+    return (
+        f"Live fight stat: {f.fighter_name}, {f.stat_type} = {f.value:g}"
+        f"{f' in round {f.round}' if f.round else ''} (fight {f.fight_id})."
+    )
 
 
 @dataclass
@@ -77,24 +101,9 @@ class InferenceEngine:
             for i, e in enumerate(evidence)
         ) or "(no evidence retrieved)"
 
-        # Describe the triggering event
-        if trigger_event.HasField("market_event"):
-            m = trigger_event.market_event
-            trigger_desc = (
-                f"Market '{m.market_id}' outcome '{m.outcome}' moved from "
-                f"{m.probability - m.delta:.4f} to {m.probability:.4f} "
-                f"(delta {m.delta:+.4f})."
-            )
-        else:
-            f = trigger_event.fight_event
-            trigger_desc = (
-                f"Fight stat: fight {f.fight_id}, fighter '{f.fighter_name}', "
-                f"{f.stat_type} = {f.value} in round {f.round}."
-            )
-
         user_prompt = f"""\
 TRIGGERING EVENT:
-{trigger_desc}
+{describe_trigger(trigger_event)}
 
 RECENT CONTEXT (last {_CONTEXT_LABEL} events):
 {context_text}
@@ -105,7 +114,7 @@ RETRIEVED EVIDENCE:
 Explain why the odds moved and assign a confidence score.
 """
         response = self._model.generate_content(user_prompt)
-        raw = response.text.strip()
+        raw = _response_text(response)
 
         explanation, confidence = self._parse_response(raw)
         return InferenceResult(
@@ -127,13 +136,30 @@ Explain why the odds moved and assign a confidence score.
         if match:
             try:
                 confidence = float(match.group(1))
-                confidence = max(0.0, min(1.0, confidence))
             except ValueError:
-                pass
+                confidence = 0.0
+            # Models sometimes answer in percent ("CONFIDENCE: 85") — a bare
+            # clamp would award that maximum confidence.
+            if 1.0 < confidence <= 100.0:
+                confidence /= 100.0
+            confidence = max(0.0, min(1.0, confidence))
             # Strip the CONFIDENCE line from the explanation.
             explanation = raw[: match.start()].strip()
 
         return explanation, confidence
+
+
+def _response_text(response) -> str:
+    """Extract text from a Gemini response without tripping the ValueError that
+    `response.text` raises on safety blocks / empty candidates."""
+    candidates = getattr(response, "candidates", None) or []
+    for cand in candidates:
+        parts = getattr(getattr(cand, "content", None), "parts", None) or []
+        text = "".join(getattr(p, "text", "") for p in parts).strip()
+        if text:
+            return text
+    feedback = getattr(response, "prompt_feedback", None)
+    raise RuntimeError(f"Gemini returned no usable text (feedback={feedback!r})")
 
 
 _CONTEXT_LABEL = "20"  # matches ContextBuilder._WINDOW_SIZE

@@ -15,8 +15,10 @@ export function Header({ connected }: HeaderProps) {
             A
           </span>
           <div className="leading-tight">
-            <div className="text-base font-semibold tracking-tight text-white">AgentPredict</div>
-            <div className="text-xs text-slate-500">Live UFC × Polymarket</div>
+            <div className="text-base font-semibold tracking-tight text-white">
+              AgentPredict <span className="text-rose-400">UFC</span>
+            </div>
+            <div className="text-xs text-slate-500">Live odds · fight stats · AI analysis</div>
           </div>
         </div>
         <div

@@ -32,6 +32,12 @@ QUERY: str = os.getenv("POLYMARKET_QUERY", "UFC").strip()
 FALLBACK_ALL: bool = os.getenv("POLYMARKET_FALLBACK_ALL", "0") == "1"
 # Cap how many markets we price each poll (get_prices is one request per market).
 MAX_MARKETS: int = int(os.getenv("POLYMARKET_MAX_MARKETS", "30"))
+# Re-emit a baseline snapshot (delta 0) for EVERY tracked market this often.
+# Late-joining clients (fresh browser tabs, restarted gateways) only see what's
+# in the replay buffer — without re-baselining, a market that hasn't moved since
+# agent startup is invisible to them. RAG ignores delta-0 events, so this is
+# display-plane only.
+REBASELINE_S: float = float(os.getenv("POLYMARKET_REBASELINE_S", "120"))
 
 # Key: (market_id, token_id) → last snapshot
 _PriceCache = Dict[Tuple[str, str], PriceSnapshot]
@@ -54,6 +60,10 @@ def _build_market_event(snapshot: PriceSnapshot, delta: float) -> "events_pb2.Ca
     m.timestamp = snapshot.timestamp_ms
     m.event_start = snapshot.event_start_ms
     m.phase = snapshot.phase
+    m.title = snapshot.title
+    m.card_title = snapshot.card_title
+    m.fight_info = snapshot.fight_info
+    m.volume = snapshot.volume
     # Ship the recent trajectory as a snapshot (see PriceSnapshot.history).
     for ts, prob in snapshot.history:
         point = m.history.add()
@@ -73,6 +83,8 @@ class PolymarketAgent:
         self._client = client or PolymarketClient()
         self._emitter = emitter or EventEmitter()
         self._price_cache: _PriceCache = {}
+        # market_id → monotonic time of the last baseline emitted for it.
+        self._baseline_at: Dict[str, float] = {}
 
     async def run(self) -> None:
         """Main polling loop. Runs indefinitely; cancel via asyncio cancellation."""
@@ -108,28 +120,31 @@ class PolymarketAgent:
 
         snapshots = await self._client.get_prices([m.condition_id for m in selected])
 
+        now = time.monotonic()
         for snap in snapshots:
             key = (snap.market_id, snap.token_id)
             prev = self._price_cache.get(key)
+            delta = (snap.probability - prev.probability) if prev is not None else None
 
-            # First sighting → emit a baseline snapshot (delta 0) so the market shows
-            # up in the dashboard even when nothing is moving (the pre-event case).
-            # The RAG layer ignores |delta| < 0.02, so these baselines don't spam
-            # predictions. Afterwards, emit only on a meaningful move.
-            if prev is None:
+            if delta is not None and abs(delta) >= DELTA_THRESHOLD:
+                # A real move — emit it (also refreshes the market's visibility).
+                ev = _build_market_event(snap, delta)
+                accepted = self._emitter.emit(ev)
+                self._baseline_at[snap.market_id] = now
+                logger.debug(
+                    "[polymarket-agent] emitted market=%s outcome=%s delta=%.4f accepted=%s",
+                    snap.market_id, snap.outcome, delta, accepted,
+                )
+            elif prev is None or (now - self._baseline_at.get(snap.market_id, 0.0)) >= REBASELINE_S:
+                # Baseline snapshot (delta 0): on first sighting AND periodically,
+                # so late-joining clients (fresh tabs, restarted gateways) receive
+                # the full slate within one REBASELINE_S window even when nothing
+                # moves. RAG ignores |delta| < 0.02, so baselines don't trigger it.
                 ev = _build_market_event(snap, 0.0)
                 self._emitter.emit(ev)
+                self._baseline_at[snap.market_id] = now
                 logger.debug("[polymarket-agent] baseline snapshot market=%s outcome=%s",
                              snap.market_id, snap.outcome)
-            else:
-                delta = snap.probability - prev.probability
-                if abs(delta) >= DELTA_THRESHOLD:
-                    ev = _build_market_event(snap, delta)
-                    accepted = self._emitter.emit(ev)
-                    logger.debug(
-                        "[polymarket-agent] emitted market=%s outcome=%s delta=%.4f accepted=%s",
-                        snap.market_id, snap.outcome, delta, accepted,
-                    )
 
             self._price_cache[key] = snap
 

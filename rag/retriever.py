@@ -41,8 +41,9 @@ def _event_to_text(event: "events_pb2.CanonicalEvent") -> str:
     """Convert a canonical event to a searchable text string for embedding."""
     if event.HasField("market_event"):
         m = event.market_event
+        fight = f"{m.card_title + ' ' if m.card_title else ''}{m.title or m.outcome}"
         return (
-            f"Polymarket: market {m.market_id} outcome '{m.outcome}' "
+            f"Polymarket {fight}: outcome '{m.outcome}' "
             f"probability {m.probability:.4f} delta {m.delta:+.4f}"
         )
     elif event.HasField("fight_event"):
@@ -80,11 +81,11 @@ class Retriever:
             )
         return self._pc.Index(_PINECONE_INDEX)
 
-    def _embed(self, text: str) -> list[float]:
+    def _embed(self, text: str, task_type: str = "retrieval_document") -> list[float]:
         result = genai.embed_content(
             model=_EMBEDDING_MODEL,
             content=text,
-            task_type="retrieval_document",
+            task_type=task_type,
             output_dimensionality=_EMBEDDING_DIM,
         )
         return result["embedding"]
@@ -123,7 +124,8 @@ class Retriever:
         Returns:
             List of EvidenceItem sorted by score descending.
         """
-        query_vector = self._embed(query_text)
+        # Asymmetric embedding model: queries and documents use different task types.
+        query_vector = self._embed(query_text, task_type="retrieval_query")
         namespaces = [namespace] if namespace else ["market_events", "fight_events"]
 
         all_results: list[EvidenceItem] = []

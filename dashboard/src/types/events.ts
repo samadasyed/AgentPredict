@@ -20,6 +20,10 @@ export interface MarketEvent {
   history?: ProbabilityPoint[]  // recent trajectory (pre-event odds trend)
   event_start?: number          // scheduled start of the fight, unix millis (0 = unknown)
   phase?: string                // "upcoming" | "live" | "final" | "" (unknown)
+  title?: string                // headline matchup, e.g. "Max Holloway vs. Conor McGregor"
+  card_title?: string           // the card, e.g. "UFC 329" / "UFC Fight Night"
+  fight_info?: string           // e.g. "Welterweight · Main Card"
+  volume?: number               // market volume (USDC) — fight prominence proxy
 }
 
 export interface FightStatEvent {

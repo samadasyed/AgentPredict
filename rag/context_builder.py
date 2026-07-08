@@ -56,8 +56,9 @@ class ContextBuilder:
             lines.append("[POLYMARKET]")
             for ev in pm_events:
                 m = ev.market_event
+                fight = f"{m.card_title}: {m.title}" if m.title else m.market_id
                 lines.append(
-                    f"market_id={m.market_id} outcome={m.outcome!r} "
+                    f"fight={fight!r} outcome={m.outcome!r} phase={m.phase or '?'} "
                     f"prob={m.probability:.4f} delta={m.delta:+.4f} ts={m.timestamp}"
                 )
 
