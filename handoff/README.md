@@ -9,11 +9,11 @@ are stale; trust these files where they disagree.)
   contracts, and the non-obvious constraints that shaped the design.
 - **[RUNBOOK.md](RUNBOOK.md)** — how to build, run, test, debug, and switch between
   mock and real modes on this machine.
-- **[DEPLOY.md](DEPLOY.md)** — hosting the production stack at agentpredictufc.com.
+- **[DEPLOY.md](DEPLOY.md)** — hosting the production stack at agentpredictmma.com.
 
 ## Production build-out (2026-07-08)
 
-The stack is now a **final product** aimed at agentpredictufc.com:
+The stack is now a **final product** aimed at agentpredictmma.com:
 
 - **Polymarket discovery is events-by-tag**: `/events?tag_slug=ufc` → one Market
   per listed fight (the winner moneyline), carrying matchup `title`, `card_title`
@@ -99,7 +99,7 @@ of strikes/takedowns/knockdowns.
 
 ## Likely next steps (nothing is in-flight)
 
-- **Host it**: follow [DEPLOY.md](DEPLOY.md) — DNS for agentpredictufc.com, TLS
+- **Host it**: follow [DEPLOY.md](DEPLOY.md) — DNS for agentpredictmma.com, TLS
   in front, `docker-compose.prod.yml` (or `scripts/run-stack.sh prod` here).
 - **UFC 329 fight night (Jul 11)** is the natural live validation: phases flip
   `upcoming → live`, odds swing, RAG explains them (cooldown-gated, one

@@ -9,7 +9,7 @@
 #   scripts/run-stack.sh prod    # real APIs + PRODUCTION dashboard: static build
 #                                # behind nginx on :8080 (proxies /ws — single
 #                                # origin); gateway stays internal. Terminate TLS
-#                                # for agentpredictufc.com in front (see
+#                                # for agentpredictmma.com in front (see
 #                                # handoff/DEPLOY.md).
 #
 # Stop with: scripts/stop-stack.sh

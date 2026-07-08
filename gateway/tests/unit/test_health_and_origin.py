@@ -92,11 +92,11 @@ def test_origin_allowed_when_no_allowlist(monkeypatch):
 
 def test_origin_enforced_when_allowlist_set(monkeypatch):
     monkeypatch.setattr(
-        server, "_ALLOWED_ORIGINS", {"https://agentpredictufc.com"}
+        server, "_ALLOWED_ORIGINS", {"https://agentpredictmma.com"}
     )
-    good = MagicMock(); good.headers = {"origin": "https://agentpredictufc.com"}
-    trailing = MagicMock(); trailing.headers = {"origin": "https://agentpredictufc.com/"}
-    upper = MagicMock(); upper.headers = {"origin": "HTTPS://AGENTPREDICTUFC.COM"}
+    good = MagicMock(); good.headers = {"origin": "https://agentpredictmma.com"}
+    trailing = MagicMock(); trailing.headers = {"origin": "https://agentpredictmma.com/"}
+    upper = MagicMock(); upper.headers = {"origin": "HTTPS://AGENTPREDICTMMA.COM"}
     bad = MagicMock(); bad.headers = {"origin": "https://evil.example"}
     missing = MagicMock(); missing.headers = {}
     assert server._origin_allowed(good) is True

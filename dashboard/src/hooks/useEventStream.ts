@@ -13,7 +13,7 @@ import type { CanonicalEvent } from '../types/events'
 import type { RagPrediction } from '../types/rag'
 
 /** WS endpoint: explicit override for dev (gateway on another port), otherwise
- * derive from the page — behind TLS at agentpredictufc.com this yields
+ * derive from the page — behind TLS at agentpredictmma.com this yields
  * wss://<host>/ws, which the reverse proxy routes to the gateway. */
 function gatewayWsUrl(): string {
   const override = import.meta.env.VITE_GATEWAY_WS_URL

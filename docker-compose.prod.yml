@@ -4,7 +4,7 @@
 #
 # Public surface: ONLY the dashboard's nginx on :80 — it serves the built SPA
 # and proxies /ws + /health to the gateway on the internal network. Terminate
-# TLS for agentpredictufc.com in front of :80 (host Caddy/nginx or cloud LB);
+# TLS for agentpredictmma.com in front of :80 (host Caddy/nginx or cloud LB);
 # see handoff/DEPLOY.md.
 #
 # Requires a populated .env (API keys) — see .env.example.
@@ -88,7 +88,7 @@ services:
       RAG_GRPC_ADDRESS: "rag:50052"
       # Lock the WebSocket to the real site (browsers can open cross-site WS
       # from any page otherwise). Add staging/dev origins as needed.
-      GATEWAY_ALLOWED_ORIGINS: "https://agentpredictufc.com,https://www.agentpredictufc.com"
+      GATEWAY_ALLOWED_ORIGINS: "https://agentpredictmma.com,https://www.agentpredictmma.com"
     env_file: [.env]
     expose: ["8000"]          # internal only — nginx fronts it
     networks: [backend]
