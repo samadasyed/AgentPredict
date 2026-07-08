@@ -138,16 +138,19 @@ async def test_replay_on_connect(broadcaster):
 
 @pytest.mark.asyncio
 async def test_replay_buffer_caps_at_buffer_size(broadcaster):
-    for i in range(60):
+    from gateway.broadcaster import _BUFFER_SIZE
+
+    overflow = 10
+    for i in range(_BUFFER_SIZE + overflow):
         await broadcaster.broadcast(_event("SOURCE_POLYMARKET", i=i))
 
     late = _mock_ws()
     await broadcaster.connect(late)
 
     events = [json.loads(p) for p in late.sent]
-    assert len(events) == 50              # only the last _BUFFER_SIZE retained
-    assert events[0]["data"]["i"] == 10   # oldest retained
-    assert events[-1]["data"]["i"] == 59  # newest
+    assert len(events) == _BUFFER_SIZE                     # only the last N retained
+    assert events[0]["data"]["i"] == overflow              # oldest retained
+    assert events[-1]["data"]["i"] == _BUFFER_SIZE + overflow - 1  # newest
 
 
 @pytest.mark.asyncio

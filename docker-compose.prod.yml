@@ -1,0 +1,114 @@
+# AgentPredict — PRODUCTION stack (real APIs, static dashboard, hardened gateway).
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Public surface: ONLY the dashboard's nginx on :80 — it serves the built SPA
+# and proxies /ws + /health to the gateway on the internal network. Terminate
+# TLS for agentpredictmma.com in front of :80 (host Caddy/nginx or cloud LB);
+# see handoff/DEPLOY.md.
+#
+# Requires a populated .env (API keys) — see .env.example.
+
+networks:
+  backend:
+    driver: bridge
+
+services:
+
+  engine:
+    build:
+      context: .
+      dockerfile: engine/Dockerfile
+    environment:
+      ENGINE_GRPC_ADDRESS: "0.0.0.0:50051"
+      # A full live card day: 15 fights × odds ticks + stats. 16384 ≈ hours of
+      # replayable history at peak rates (power of 2 required).
+      ENGINE_RING_CAPACITY: "16384"
+    expose: ["50051"]
+    networks: [backend]
+    init: true
+    restart: always
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  polymarket-agent:
+    build:
+      context: .
+      dockerfile: agents/Dockerfile
+    command: ["python", "-m", "agents.polymarket.agent"]
+    environment:
+      ENGINE_GRPC_ADDRESS: "engine:50051"
+    env_file: [.env]
+    networks: [backend]
+    depends_on:
+      engine: { condition: service_healthy }
+    restart: always
+
+  mma-agent:
+    build:
+      context: .
+      dockerfile: agents/Dockerfile
+    command: ["python", "-m", "agents.mma.agent"]
+    environment:
+      ENGINE_GRPC_ADDRESS: "engine:50051"
+    env_file: [.env]
+    networks: [backend]
+    depends_on:
+      engine: { condition: service_healthy }
+    restart: always
+
+  rag:
+    build:
+      context: .
+      dockerfile: rag/Dockerfile
+    command: ["python", "-m", "rag.orchestrator"]
+    environment:
+      ENGINE_GRPC_ADDRESS: "engine:50051"
+      RAG_GRPC_ADDRESS: "0.0.0.0:50052"
+    env_file: [.env]
+    expose: ["50052"]
+    networks: [backend]
+    depends_on:
+      engine: { condition: service_healthy }
+    restart: always
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    # --proxy-headers so client IP/scheme survive the nginx hop in front.
+    command: ["uvicorn", "gateway.server:app", "--host", "0.0.0.0", "--port", "8000",
+              "--proxy-headers", "--forwarded-allow-ips", "*"]
+    environment:
+      ENGINE_GRPC_ADDRESS: "engine:50051"
+      RAG_GRPC_ADDRESS: "rag:50052"
+      # Lock the WebSocket to the real site (browsers can open cross-site WS
+      # from any page otherwise). Add staging/dev origins as needed.
+      GATEWAY_ALLOWED_ORIGINS: "https://agentpredictmma.com,https://www.agentpredictmma.com"
+    env_file: [.env]
+    expose: ["8000"]          # internal only — nginx fronts it
+    networks: [backend]
+    depends_on:
+      engine: { condition: service_healthy }
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile          # production: static build + nginx
+    ports:
+      - "80:80"                       # put the TLS terminator in front of this
+    networks: [backend]
+    depends_on:
+      gateway: { condition: service_started }
+    restart: always

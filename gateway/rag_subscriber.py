@@ -12,6 +12,7 @@ import os
 import grpc
 
 from gateway.broadcaster import Broadcaster
+from gateway.grpc_health import KEEPALIVE_CHANNEL_OPTIONS, SubscriberHealth
 from gateway.proto_utils import to_dict
 from agents.generated import events_pb2, events_pb2_grpc  # type: ignore[import]
 
@@ -27,6 +28,7 @@ class RagSubscriber:
         self._broadcaster = broadcaster
         self._min_confidence = min_confidence
         self._running = False
+        self.health = SubscriberHealth()
 
     async def run(self) -> None:
         """Connect to RAG orchestrator, stream predictions, broadcast. Reconnects on error."""
@@ -39,16 +41,20 @@ class RagSubscriber:
             except asyncio.CancelledError:
                 break
             except Exception as exc:
+                self.health.on_error(exc)
                 logger.error("[rag-sub] stream error: %s — reconnecting in 5s", exc)
                 await asyncio.sleep(5)
 
     async def _stream_predictions(self) -> None:
-        channel = grpc.aio.insecure_channel(_RAG_GRPC_ADDRESS)
+        channel = grpc.aio.insecure_channel(
+            _RAG_GRPC_ADDRESS, options=KEEPALIVE_CHANNEL_OPTIONS)
         try:
             stub = events_pb2_grpc.RagStreamStub(channel)
             request = events_pb2.RagSubscribeRequest(min_confidence=self._min_confidence)
 
+            self.health.on_connect()
             async for prediction in stub.SubscribePredictions(request):
+                self.health.on_message()
                 data = to_dict(prediction)
                 await self._broadcaster.broadcast({"type": "prediction", "data": data})
         finally:

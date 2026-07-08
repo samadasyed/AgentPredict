@@ -31,7 +31,8 @@ function ConfidenceBar({ confidence }: { confidence: number }) {
 }
 
 export function PredictionCard({ prediction }: PredictionCardProps) {
-  const ts = new Date(prediction.timestamp).toLocaleTimeString()
+  // int64 proto fields arrive as JSON strings — coerce before Date().
+  const ts = new Date(Number(prediction.timestamp) || 0).toLocaleTimeString()
 
   return (
     <div className="space-y-2.5 rounded-xl border border-white/5 bg-slate-900/60 p-4 transition-colors hover:border-white/10">

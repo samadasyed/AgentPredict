@@ -12,7 +12,7 @@
 
 import type { CanonicalEvent } from '../types/events'
 import type { MarketSeries, Phase } from './marketSeries'
-import { parseFighters } from './marketSeries'
+import { matchupFor, parseFighters } from './marketSeries'
 
 const UPCOMING = 'FIGHT_UPCOMING'
 const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v ?? 0)) || 0
@@ -20,6 +20,7 @@ const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v ?? 0))
 export interface UpcomingFight {
   id: string
   matchup: string
+  cardTitle: string           // "UFC 329" etc.; '' unknown
   eventStart: number          // ms; 0 = unknown
   phase: Phase
   market: MarketSeries | null // odds/history when a market exists
@@ -58,7 +59,7 @@ export function buildUpcomingFights(events: CanonicalEvent[], series: MarketSeri
   }
 
   const marketUpcoming = series.filter(
-    (s) => (s.phase === 'upcoming' || s.phase === 'live') && parseFighters(s.outcome),
+    (s) => (s.phase === 'upcoming' || s.phase === 'live') && parseFighters(matchupFor(s)),
   )
   const usedMarkets = new Set<string>()
 
@@ -66,12 +67,14 @@ export function buildUpcomingFights(events: CanonicalEvent[], series: MarketSeri
   for (const f of byId.values()) {
     if (!f) continue
     const market =
-      marketUpcoming.find((s) => !usedMarkets.has(s.marketId) && sameMatchup(f.fighter_name, s.outcome)) ?? null
+      marketUpcoming.find((s) => !usedMarkets.has(s.marketId) && sameMatchup(f.fighter_name, matchupFor(s))) ?? null
     if (market) usedMarkets.add(market.marketId)
     cards.push({
       id: f.fight_id,
-      matchup: f.fighter_name,
-      eventStart: num(f.event_start),
+      // Prefer the market's title — it names both fighters cleanly.
+      matchup: market ? matchupFor(market) : f.fighter_name,
+      cardTitle: market?.cardTitle ?? '',
+      eventStart: num(f.event_start) || (market?.eventStart ?? 0),
       phase: asPhase(f.phase),
       market,
     })
@@ -82,7 +85,8 @@ export function buildUpcomingFights(events: CanonicalEvent[], series: MarketSeri
     if (usedMarkets.has(s.marketId)) continue
     cards.push({
       id: `mkt:${s.marketId}`,
-      matchup: s.outcome,
+      matchup: matchupFor(s),
+      cardTitle: s.cardTitle,
       eventStart: s.eventStart,
       phase: s.phase,
       market: s,

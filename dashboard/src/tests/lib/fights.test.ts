@@ -17,12 +17,14 @@ function upcomingEvent(
     } as FightStatEvent,
   }
 }
-function marketEvent(marketId: string, outcome: string, startMs: number): CanonicalEvent {
+function marketEvent(
+  marketId: string, outcome: string, startMs: number, meta: Partial<MarketEvent> = {},
+): CanonicalEvent {
   return {
     event_id: `m${seq++}`, source: 'SOURCE_POLYMARKET', ingested_at: 0,
     market_event: {
       market_id: marketId, outcome, probability: 0.6, delta: 0.02, timestamp: seq,
-      event_start: startMs, phase: 'upcoming',
+      event_start: startMs, phase: 'upcoming', ...meta,
     } as MarketEvent,
   }
 }
@@ -73,5 +75,33 @@ describe('buildUpcomingFights', () => {
     const cards = buildUpcomingFights(events, [])
     expect(cards).toHaveLength(1)
     expect(cards[0].phase).toBe('live')
+  })
+
+  it('uses the fight title for matching and carries the card title (real Gamma shape)', () => {
+    // Real contract: outcome is ONE fighter, the matchup lives in `title`.
+    const events = [
+      upcomingEvent('329', 'McGregor vs. Holloway 2', now + 4 * 86_400_000),
+      marketEvent('mkt-329-main', 'Max Holloway', now + 4 * 86_400_000, {
+        title: 'Max Holloway vs. Conor McGregor',
+        card_title: 'UFC 329',
+        fight_info: 'Welterweight · Main Card',
+      }),
+      marketEvent('mkt-329-co', 'Paddy Pimblett', now + 4 * 86_400_000, {
+        title: 'Paddy Pimblett vs. Benoît Saint Denis',
+        card_title: 'UFC 329',
+      }),
+    ]
+    const series = buildMarketSeries(events)
+    const cards = buildUpcomingFights(events, series)
+    expect(cards).toHaveLength(2)
+    const main = cards.find((c) => c.id === '329')!
+    // Schedule card merged with the main-event market via title surnames…
+    expect(main.market?.marketId).toBe('mkt-329-main')
+    // …and displays the market's full matchup + card.
+    expect(main.matchup).toBe('Max Holloway vs. Conor McGregor')
+    expect(main.cardTitle).toBe('UFC 329')
+    const co = cards.find((c) => c.id === 'mkt:mkt-329-co')!
+    expect(co.matchup).toBe('Paddy Pimblett vs. Benoît Saint Denis')
+    expect(co.cardTitle).toBe('UFC 329')
   })
 })

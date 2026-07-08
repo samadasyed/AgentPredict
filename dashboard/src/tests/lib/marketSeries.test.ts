@@ -9,6 +9,7 @@ import {
   buildFightUpdates,
   findFightForOutcome,
   formatCountdown,
+  matchupFor,
 } from '../../lib/marketSeries'
 
 let seq = 0
@@ -53,6 +54,21 @@ describe('buildMarketSeries', () => {
     const [s] = buildMarketSeries(events)
     expect(s.eventStart).toBe(1_900_000_000_000)
   })
+
+  it('carries fight metadata from the most recent event that has it', () => {
+    const events = newestFirst([
+      market({ market_id: 'm3', probability: 0.66, outcome: 'Max Holloway',
+               title: 'Max Holloway vs. Conor McGregor', card_title: 'UFC 329',
+               fight_info: 'Welterweight · Main Card', volume: 1_464_663 }),
+      market({ market_id: 'm3', probability: 0.68 }),   // partial tick, no metadata
+    ])
+    const [s] = buildMarketSeries(events)
+    expect(s.title).toBe('Max Holloway vs. Conor McGregor')
+    expect(s.cardTitle).toBe('UFC 329')
+    expect(s.fightInfo).toBe('Welterweight · Main Card')
+    expect(s.volume).toBe(1_464_663)
+    expect(matchupFor(s)).toBe('Max Holloway vs. Conor McGregor')
+  })
 })
 
 describe('classifyPhase', () => {
@@ -85,6 +101,21 @@ describe('pickFeatured / upcomingFights', () => {
     ]))
     expect(pickFeatured(series)?.marketId).toBe('soon')
     expect(upcomingFights(series).map((s) => s.marketId)).toEqual(['soon', 'far'])
+  })
+
+  it('headlines the main event (biggest volume) among same-card fights', () => {
+    const now = Date.now()
+    // A real card: prelims start an hour before the main event, but the main
+    // event has 100x the volume — it must lead, not the earliest prelim.
+    const series = buildMarketSeries(newestFirst([
+      market({ market_id: 'prelim', probability: 0.5, phase: 'upcoming',
+               event_start: now + 2 * 86_400_000, volume: 12_000 }),
+      market({ market_id: 'main', probability: 0.66, phase: 'upcoming',
+               event_start: now + 2 * 86_400_000 + 3_600_000, volume: 1_400_000 }),
+      market({ market_id: 'next-week', probability: 0.5, phase: 'upcoming',
+               event_start: now + 9 * 86_400_000, volume: 9_000_000 }),
+    ]))
+    expect(pickFeatured(series)?.marketId).toBe('main')
   })
 })
 

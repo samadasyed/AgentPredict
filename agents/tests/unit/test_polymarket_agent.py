@@ -65,6 +65,22 @@ async def test_first_poll_emits_baseline_snapshot(agent, mock_emitter):
 
 
 @pytest.mark.asyncio
+async def test_quiet_market_rebaselines_periodically(agent, mock_emitter):
+    """A market that never moves re-emits a baseline once REBASELINE_S elapses,
+    so late-joining clients (fresh tabs / restarted gateways) still see it."""
+    await agent._poll_once()                       # first sighting → baseline
+    await agent._poll_once()                       # quiet, within window → nothing
+    assert mock_emitter.emit.call_count == 1
+
+    # Age the last baseline past the window and poll again.
+    for mid in agent._baseline_at:
+        agent._baseline_at[mid] -= 10_000
+    await agent._poll_once()
+    assert mock_emitter.emit.call_count == 2
+    assert mock_emitter.emit.call_args[0][0].market_event.delta == 0.0
+
+
+@pytest.mark.asyncio
 async def test_significant_delta_emits_event(agent, mock_client, mock_emitter):
     """A delta exceeding DELTA_THRESHOLD should produce exactly one emit."""
     # First poll — baseline

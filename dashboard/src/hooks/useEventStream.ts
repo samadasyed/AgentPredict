@@ -12,9 +12,23 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CanonicalEvent } from '../types/events'
 import type { RagPrediction } from '../types/rag'
 
-const GATEWAY_WS_URL = import.meta.env.VITE_GATEWAY_WS_URL ?? 'ws://localhost:8000/ws'
+/** WS endpoint: explicit override for dev (gateway on another port), otherwise
+ * derive from the page — behind TLS at agentpredictmma.com this yields
+ * wss://<host>/ws, which the reverse proxy routes to the gateway. */
+function gatewayWsUrl(): string {
+  const override = import.meta.env.VITE_GATEWAY_WS_URL
+  if (override) return override
+  if (typeof window !== 'undefined' && window.location.host) {
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${proto}://${window.location.host}/ws`
+  }
+  return 'ws://localhost:8000/ws'
+}
+const GATEWAY_WS_URL = gatewayWsUrl()
 const RECONNECT_DELAY_MS = 3_000
-const MAX_EVENTS = 200
+// Deep enough that a full fight slate's periodic re-baselines plus live-fight
+// stat traffic coexist without evicting quiet markets between cycles.
+const MAX_EVENTS = 400
 const MAX_PREDS  = 50
 
 export interface UseEventStreamResult {

@@ -23,14 +23,21 @@ export type Phase = 'live' | 'upcoming' | 'final' | 'unknown'
 
 export interface MarketSeries {
   marketId: string
-  outcome: string
+  outcome: string         // the side this probability tracks (a fighter's name)
   points: number[]        // probabilities [0,1], chronological
   latest: MarketEvent
   updatedAt: number       // ms
   phase: Phase
   eventStart: number      // ms; 0 = unknown
   historyStart: number    // ms of the first history point; 0 = none
+  title: string           // headline matchup ("A vs. B"); '' when not a fight market
+  cardTitle: string       // "UFC 329" etc.; '' unknown
+  fightInfo: string       // "Welterweight · Main Card"; '' unknown
+  volume: number          // market volume; 0 unknown
 }
+
+/** Display matchup for a series — the fight title when known, else the outcome. */
+export const matchupFor = (s: MarketSeries): string => s.title || s.outcome
 
 const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v ?? 0)) || 0
 
@@ -67,11 +74,20 @@ export function buildMarketSeries(events: CanonicalEvent[]): MarketSeries[] {
     const points = seed.map((h) => h.probability)
     let phaseStr = ''
     let eventStart = 0
+    let title = ''
+    let cardTitle = ''
+    let fightInfo = ''
+    let volume = 0
     for (const m of arr) {
       points.push(m.probability)
       if (m.phase) phaseStr = m.phase
       const es = num(m.event_start)
       if (es) eventStart = es
+      if (m.title) title = m.title
+      if (m.card_title) cardTitle = m.card_title
+      if (m.fight_info) fightInfo = m.fight_info
+      const vol = num(m.volume)
+      if (vol) volume = vol
     }
 
     series.push({
@@ -83,6 +99,10 @@ export function buildMarketSeries(events: CanonicalEvent[]): MarketSeries[] {
       phase: classifyPhase({ ...latest, phase: phaseStr }, eventStart),
       eventStart,
       historyStart: seed.length ? num(seed[0].timestamp) : 0,
+      title,
+      cardTitle,
+      fightInfo,
+      volume,
     })
   }
   return series
@@ -104,7 +124,13 @@ export function pickFeatured(series: MarketSeries[]): MarketSeries | null {
 
   const upcoming = series.filter((s) => s.phase === 'upcoming' && s.eventStart > 0)
   if (upcoming.length) {
-    return [...upcoming].sort((a, b) => a.eventStart - b.eventStart)[0]
+    // Soonest card first — but fights on the same card start within hours of
+    // each other, so headline the biggest market (the main event), not the
+    // earliest prelim.
+    const sorted = [...upcoming].sort((a, b) => a.eventStart - b.eventStart)
+    const windowEnd = sorted[0].eventStart + DAY_MS
+    const sameCard = sorted.filter((s) => s.eventStart <= windowEnd)
+    return sameCard.sort((a, b) => b.volume - a.volume)[0]
   }
 
   return [...series].sort(

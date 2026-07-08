@@ -36,7 +36,11 @@ from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
-_BUFFER_SIZE = 50      # per-stream replay depth (events and predictions buffered separately)
+# Per-stream replay depth (events and predictions buffered separately). Sized so
+# a full fight slate (dozens of market baselines) survives the periodic
+# FIGHT_UPCOMING/baseline re-emits between a client's connect and the next
+# re-baseline cycle. Matches the dashboard's own event cap.
+_BUFFER_SIZE = 200
 _SEND_TIMEOUT_S = 5.0  # bound a single send so one stalled socket can't hang replay/fan-out
 
 # Map client-supplied filter values to the canonical EventSource names emitted by
@@ -94,6 +98,7 @@ class Broadcaster:
         for message in snapshot:
             if not await self._safe_send(ws, message):
                 await self.disconnect(ws)
+                await self._safe_close(ws)
                 return
 
     async def disconnect(self, ws: WebSocket) -> None:
@@ -112,24 +117,29 @@ class Broadcaster:
         logger.debug("[broadcaster] filter for client set: %r -> %r", source, normalized)
 
     async def broadcast(self, message: dict[str, Any]) -> None:
-        """Buffer the message for replay and fan it out to matching clients."""
+        """Buffer the message for replay and fan it out to matching clients.
+
+        Serialization happens once per message (not per client), and sends run
+        concurrently — one slow client costs at most _SEND_TIMEOUT_S total, not
+        _SEND_TIMEOUT_S × position-in-list for everyone behind it."""
         async with self._lock:
             # Buffering and target snapshot share broadcast()'s critical section so
             # they are atomic relative to connect()'s snapshot+register (exactly-once).
             self._buffer(message)
             targets = list(self._clients.items())
 
-        dead: list[WebSocket] = []
-        for ws, state in targets:
-            if not _matches(state, message):
-                continue
-            if not await self._safe_send(ws, message):
-                dead.append(ws)
+        text = json.dumps(message)
+        matching = [ws for ws, state in targets if _matches(state, message)]
+        results = await asyncio.gather(
+            *(self._safe_send_text(ws, text) for ws in matching))
+        dead = [ws for ws, ok in zip(matching, results) if not ok]
 
         if dead:
             async with self._lock:
                 for ws in dead:
                     self._clients.pop(ws, None)
+            for ws in dead:
+                await self._safe_close(ws)
 
     def _buffer(self, message: dict[str, Any]) -> None:
         msg_type = message.get("type")
@@ -140,12 +150,24 @@ class Broadcaster:
 
     async def _safe_send(self, ws: WebSocket, message: dict[str, Any]) -> bool:
         """Send one message; return False (instead of raising) if the client is dead."""
+        return await self._safe_send_text(ws, json.dumps(message))
+
+    async def _safe_send_text(self, ws: WebSocket, text: str) -> bool:
         try:
-            await asyncio.wait_for(ws.send_text(json.dumps(message)), timeout=_SEND_TIMEOUT_S)
+            await asyncio.wait_for(ws.send_text(text), timeout=_SEND_TIMEOUT_S)
             return True
         except Exception as exc:  # noqa: BLE001 — any send failure means "drop client"
             logger.debug("[broadcaster] send failed (%s) — dropping client", exc)
             return False
+
+    @staticmethod
+    async def _safe_close(ws: WebSocket) -> None:
+        """Actively close a dropped socket so the browser sees the disconnect
+        (and reconnects) instead of holding a silently frozen connection."""
+        try:
+            await asyncio.wait_for(ws.close(code=1011), timeout=1.0)
+        except Exception:  # noqa: BLE001 — already gone is fine
+            pass
 
     @property
     def client_count(self) -> int:

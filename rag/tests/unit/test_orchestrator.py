@@ -64,6 +64,12 @@ def test_is_meaningful_zero_delta():
 
 # ─── Orchestrator._handle_event ───────────────────────────────────────────────
 
+async def _handle_and_settle(orch, ev) -> None:
+    """Trigger the handler and wait for its fire-and-forget cycle task."""
+    await orch._handle_event(ev)
+    if orch._cycle_task is not None:
+        await orch._cycle_task
+
 @pytest.fixture
 def orchestrator_with_mocks():
     with patch("rag.orchestrator.Retriever"), \
@@ -93,7 +99,7 @@ def orchestrator_with_mocks():
 async def test_handle_meaningful_event_broadcasts(orchestrator_with_mocks):
     orch = orchestrator_with_mocks
     ev = _market_event(delta=0.05)
-    await orch._handle_event(ev)
+    await _handle_and_settle(orch, ev)
     orch._rag_service.broadcast.assert_called_once()
 
 
@@ -101,7 +107,7 @@ async def test_handle_meaningful_event_broadcasts(orchestrator_with_mocks):
 async def test_handle_non_meaningful_event_skips_rag(orchestrator_with_mocks):
     orch = orchestrator_with_mocks
     ev = _market_event(delta=0.001)
-    await orch._handle_event(ev)
+    await _handle_and_settle(orch, ev)
     orch._inference.explain.assert_not_called()
     orch._rag_service.broadcast.assert_not_called()
 
@@ -110,7 +116,7 @@ async def test_handle_non_meaningful_event_skips_rag(orchestrator_with_mocks):
 async def test_handle_event_always_updates_context(orchestrator_with_mocks):
     orch = orchestrator_with_mocks
     ev = _market_event(delta=0.001)  # sub-threshold
-    await orch._handle_event(ev)
+    await _handle_and_settle(orch, ev)
     orch._context_builder.add.assert_called_once_with(ev)
 
 
@@ -120,8 +126,51 @@ async def test_inference_error_does_not_crash(orchestrator_with_mocks):
     orch._inference.explain.side_effect = RuntimeError("Gemini unavailable")
     ev = _market_event(delta=0.05)
     # Should log but not raise
-    await orch._handle_event(ev)
+    await _handle_and_settle(orch, ev)
     orch._rag_service.broadcast.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_market_cooldown_skips_second_cycle(orchestrator_with_mocks):
+    orch = orchestrator_with_mocks
+    await _handle_and_settle(orch, _market_event(delta=0.05))
+    await orch._handle_event(_market_event(delta=0.05))  # same market, immediately
+    # Only ONE paid inference ran; the second trigger was on cooldown.
+    assert orch._inference.explain.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_different_markets_not_cross_cooled(orchestrator_with_mocks):
+    orch = orchestrator_with_mocks
+    ev1 = _market_event(delta=0.05)
+    ev2 = _market_event(delta=0.05)
+    ev2.market_event.market_id = "mkt-other"
+    await _handle_and_settle(orch, ev1)
+    await _handle_and_settle(orch, ev2)
+    assert orch._inference.explain.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_failed_verification_not_broadcast(orchestrator_with_mocks):
+    orch = orchestrator_with_mocks
+    orch._verifier.verify.return_value = MagicMock(
+        explanation="Insufficient confidence…", confidence=0.2, passed=False,
+    )
+    await _handle_and_settle(orch, _market_event(delta=0.05))
+    orch._rag_service.broadcast.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_upsert_budget_caps_writes(orchestrator_with_mocks):
+    orch = orchestrator_with_mocks
+    with patch("rag.orchestrator._MAX_UPSERTS_PER_HOUR", 2):
+        for i in range(4):
+            ev = _market_event(delta=0.05)
+            ev.market_event.market_id = f"mkt-{i}"   # distinct → no cooldown skips
+            await _handle_and_settle(orch, ev)
+    assert orch._retriever.upsert.call_count == 2
+    # Inference still ran every time — only the WRITE is budgeted.
+    assert orch._inference.explain.call_count == 4
 
 
 # ─── RagStreamServiceImpl ─────────────────────────────────────────────────────

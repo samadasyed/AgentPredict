@@ -76,9 +76,10 @@ class MockInference:
         top = evidence[0].text if evidence else "recent live-fight signals"
         if trigger_event.HasField("market_event"):
             m = trigger_event.market_event
-            # Mentions market_id AND outcome so the Verifier's identifier check passes.
+            fight = m.title or m.outcome
+            # Mentions the outcome/fighters so the Verifier's identifier check passes.
             explanation = (
-                f"The market '{m.outcome}' ({m.market_id}) moved {m.delta:+.1%} to an implied "
+                f"{fight}: '{m.outcome}' moved {m.delta:+.1%} to an implied "
                 f"{m.probability:.0%}. This shift is consistent with live momentum — {top}"
             )
         else:

@@ -9,8 +9,9 @@ interface EventCardProps {
   event: CanonicalEvent
 }
 
-function formatTs(ms: number): string {
-  return new Date(ms).toLocaleTimeString()
+function formatTs(ms: number | string): string {
+  // int64 proto fields arrive as JSON strings — coerce before Date().
+  return new Date(Number(ms) || 0).toLocaleTimeString()
 }
 
 function EventBody({ event }: { event: CanonicalEvent }) {
@@ -21,7 +22,7 @@ function EventBody({ event }: { event: CanonicalEvent }) {
     const deltaPct = (m.delta * 100).toFixed(2)
     return (
       <div className="text-sm text-slate-200">
-        <span className="font-medium">{m.outcome}</span>
+        <span className="font-medium">{m.title || m.outcome}</span>
         <div className="mt-1 flex items-center gap-2">
           <span className="font-mono font-bold text-white">{pct}%</span>
           <span
@@ -29,7 +30,9 @@ function EventBody({ event }: { event: CanonicalEvent }) {
           >
             {deltaSign}{deltaPct}%
           </span>
-          <span className="truncate font-mono text-xs text-slate-600">{m.market_id}</span>
+          <span className="truncate font-mono text-xs text-slate-600" title={m.market_id}>
+            {m.title ? `${m.outcome}${m.card_title ? ` · ${m.card_title}` : ''}` : m.market_id}
+          </span>
         </div>
       </div>
     )
