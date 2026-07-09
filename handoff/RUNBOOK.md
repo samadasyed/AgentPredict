@@ -43,7 +43,9 @@ podman build -t agentpredict-rag:dev     -f rag/Dockerfile     .
 podman build -t agentpredict-dashboard:dev -f dashboard/Dockerfile.dev ./dashboard
 ```
 
-Then `scripts/stop-stack.sh && scripts/run-stack.sh <mode>`. Tip: when
+Then `scripts/stop-stack.sh && scripts/run-stack.sh <mode>`, and run
+`podman image prune -f` afterwards — the 15G disk fills with orphaned layers
+after a few rebuild cycles. Tip: when
 backgrounding a build, make `podman build` the last command in the shell line or
 the exit-code notification lies.
 
@@ -114,6 +116,7 @@ podman run --rm -v "$PWD/dashboard":/app:z -w /app node:20-slim bash -c \
 | Engine silently drops events | Normalizer validation: source ≠ SOURCE_UNKNOWN, market_id non-empty, probability ∈ [0,1], envelope timestamp within **60s** of now (never back-date events; use the `history` field) |
 | 401 from BallDontLie `/fights` or `/fight_stats` | Plan-gated (needs GOAT tier) — expected on the current key; not a bug |
 | Podman bind-mount permission errors | Add `:z` to the volume flag (SELinux) |
+| Image pull/build fails "no space left on device" | The 15G root disk fills with orphaned layers from rebuilds — run `podman image prune -f` (safe: removes only untagged layers). Freed ~1GB of 180+ stale layers on 2026-07-09 |
 
 ## Git conventions
 
