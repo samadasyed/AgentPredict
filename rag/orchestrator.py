@@ -44,9 +44,13 @@ logger = logging.getLogger(__name__)
 _ENGINE_GRPC_ADDRESS = os.getenv("ENGINE_GRPC_ADDRESS", "localhost:50051")
 _RAG_GRPC_ADDRESS    = os.getenv("RAG_GRPC_ADDRESS", "0.0.0.0:50052")
 
-# Minimum absolute probability delta to trigger a RAG cycle.
-# Events below this are consumed by context_builder but not sent to inference.
-_MEANINGFUL_DELTA_THRESHOLD = 0.02
+# Minimum absolute probability drift (cumulative since the last explanation)
+# to trigger a RAG cycle. Events below this are consumed by context_builder
+# but not sent to inference. Default from measured pre-fight-week movement
+# (2026-07-09, 26 open markets): 0.01 fires on ~2/3 of markets on a typical
+# day vs ~40% at 0.02; the per-market cooldown, single-flight cycle lock, and
+# upsert budget still bound spend.
+_MEANINGFUL_DELTA_THRESHOLD = float(os.getenv("RAG_DRIFT_THRESHOLD", "0.01"))
 
 # Schedule/discovery markers carry no analyzable change — never run inference on them
 # (they're also re-emitted periodically, which would spam the model).
@@ -221,7 +225,10 @@ class Orchestrator:
         )
         event_loop_task = asyncio.create_task(self._subscribe_and_process())
 
-        logger.info("[orchestrator] started")
+        logger.info(
+            "[orchestrator] started — drift_threshold=%.3f cooldown=%.0fs",
+            _MEANINGFUL_DELTA_THRESHOLD, _MARKET_COOLDOWN_S,
+        )
         await asyncio.gather(grpc_server_task, event_loop_task)
 
     def _start_grpc_server(self) -> None:

@@ -161,10 +161,14 @@ async def test_failed_verification_not_broadcast(orchestrator_with_mocks):
 
 
 @pytest.mark.asyncio
-async def test_slow_drift_accumulates_to_a_trigger(orchestrator_with_mocks):
+async def test_slow_drift_accumulates_to_a_trigger(orchestrator_with_mocks, monkeypatch):
     """Pre-event lines move a fraction of a point per tick. No single tick is
     meaningful, but once the CUMULATIVE move crosses the threshold, one
-    explanation fires — with the total move as its delta."""
+    explanation fires — with the total move as its delta. (Threshold pinned to
+    0.02 here so the tick arithmetic below stays valid whatever the deploy
+    default / RAG_DRIFT_THRESHOLD env is set to.)"""
+    import rag.orchestrator as orchestrator_module
+    monkeypatch.setattr(orchestrator_module, "_MEANINGFUL_DELTA_THRESHOLD", 0.02)
     orch = orchestrator_with_mocks
     # Four ticks of +0.5pt each: 0.650 → 0.665 (ref seeds at 0.645).
     for i, p in enumerate((0.650, 0.655, 0.660, 0.665)):
