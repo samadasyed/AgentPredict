@@ -4,14 +4,10 @@
 
 import type { CanonicalEvent } from '../../types/events'
 import { SourceBadge } from './SourceBadge'
+import { formatClockTime } from '../../lib/time'
 
 interface EventCardProps {
   event: CanonicalEvent
-}
-
-function formatTs(ms: number | string): string {
-  // int64 proto fields arrive as JSON strings — coerce before Date().
-  return new Date(Number(ms) || 0).toLocaleTimeString()
 }
 
 function EventBody({ event }: { event: CanonicalEvent }) {
@@ -65,7 +61,7 @@ export function EventCard({ event }: EventCardProps) {
       <div className="min-w-0 flex-1">
         <EventBody event={event} />
       </div>
-      <span className="whitespace-nowrap font-mono text-xs text-slate-600">{formatTs(ts)}</span>
+      <span className="whitespace-nowrap font-mono text-xs text-slate-600">{formatClockTime(ts)}</span>
     </div>
   )
 }
