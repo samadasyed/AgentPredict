@@ -80,7 +80,8 @@ timestamps) arrive in the browser as **strings**; the dashboard coerces with the
 The Polymarket agent emits a **baseline event (delta 0)** the first time it sees a
 market — otherwise static pre-event markets never appear (the old behavior emitted
 only on |delta| ≥ threshold, leaving the dashboard empty on quiet days). RAG
-ignores |delta| < 0.02, so baselines don't trigger predictions.
+ignores cumulative drift < `RAG_DRIFT_THRESHOLD` (default 0.01), so flat
+baselines don't trigger predictions.
 
 ### 5. Proto changes ripple three ways
 Editing `proto/events.proto` requires regenerating: (a) Python stubs in

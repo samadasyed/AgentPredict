@@ -7,7 +7,8 @@ serves verified `RagPrediction`s to the gateway over gRPC (`RagStream`).
 ## Trigger policy (`orchestrator.py`) — the cost/quality core
 
 - **Cumulative drift**: a market triggers when its probability has moved
-  ≥ `_MEANINGFUL_DELTA_THRESHOLD` (0.02) since the *last explanation* (ref
+  ≥ `_MEANINGFUL_DELTA_THRESHOLD` (`RAG_DRIFT_THRESHOLD`, default 0.01)
+  since the *last explanation* (ref
   seeds at first sight as the pre-move price). One sharp tick or hours of
   slow drift both qualify; flat re-baselines never do. The trigger event's
   `delta` is rewritten to the cumulative move so the prompt describes the
