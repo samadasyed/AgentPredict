@@ -157,6 +157,20 @@ void RunGrpcServer(const std::string&          address,
     builder.RegisterService(&ingestion_svc);
     builder.RegisterService(&stream_svc);
 
+    // Keepalive policy. The Python clients (agents / gateway / rag) ping every
+    // 10–30s with keepalive_permit_without_calls to detect half-open sockets.
+    // gRPC's SERVER default only tolerates one idle-connection ping per FIVE
+    // MINUTES — anything faster earns "ping strikes", and two strikes trigger a
+    // GOAWAY (ENHANCE_YOUR_CALM "too_many_pings") that tears down the transport
+    // and fails whatever emit was in flight. Accept the clients' cadence.
+    builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1);
+    builder.AddChannelArgument(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5000);
+    builder.AddChannelArgument(GRPC_ARG_HTTP2_MAX_PING_STRIKES, 0);
+    // And probe from our side too, so dead subscriber sockets are reaped in
+    // ~40s instead of lingering until the next write.
+    builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIME_MS, 30000);
+    builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 10000);
+
     // TODO: add TLS credentials and auth interceptor before production deploy.
 
     auto server = builder.BuildAndStart();
