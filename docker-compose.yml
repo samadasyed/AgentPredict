@@ -1,5 +1,8 @@
 version: "3.9"
 
+# Project name isolates this DEV stack from the prod compose project.
+name: agentpredict-dev
+
 # ─── Networks ─────────────────────────────────────────────────────────────────
 networks:
   backend:

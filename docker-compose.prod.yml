@@ -9,6 +9,8 @@
 #
 # Requires a populated .env (API keys) — see .env.example.
 
+name: agentpredict-prod
+
 networks:
   backend:
     driver: bridge

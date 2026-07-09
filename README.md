@@ -67,6 +67,11 @@ make demo          # docker compose or podman; falls back to scripts/run-stack.s
 # → dashboard at http://localhost:5173
 ```
 
+Dev stacks are fully isolated from a production deployment on the same host
+(separate container names, networks, image tags, and ports) — `make demo` /
+`make down` can never touch a live site. Production changes ship only through
+the guardrailed `make deploy`. Details: [handoff/DEV-VS-PROD.md](handoff/DEV-VS-PROD.md).
+
 ## Real data
 
 ```bash
@@ -126,8 +131,9 @@ Suite sizes at last count: 47 C++ · 112 Python · 44 dashboard, `tsc` clean.
 
 - New to the project? Start with [humandocs/ProjectOverview.md](humandocs/ProjectOverview.md).
 - Hacking on a component? Its file in [agentdocs/](agentdocs/) is the reference.
-- Running or deploying it? [handoff/RUNBOOK.md](handoff/RUNBOOK.md) and
-  [handoff/DEPLOY.md](handoff/DEPLOY.md).
+- Running or deploying it? [handoff/RUNBOOK.md](handoff/RUNBOOK.md),
+  [handoff/DEPLOY.md](handoff/DEPLOY.md), and the dev-vs-prod workflow in
+  [handoff/DEV-VS-PROD.md](handoff/DEV-VS-PROD.md).
 - The non-obvious design constraints (clock-skew guard, sentinel events,
   int64-as-strings, cost guards): [handoff/ARCHITECTURE.md](handoff/ARCHITECTURE.md).
 
