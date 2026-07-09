@@ -10,6 +10,8 @@ the narrative overview — both current as of 2026-07-09.)
 - **[RUNBOOK.md](RUNBOOK.md)** — how to build, run, test, debug, and switch between
   mock and real modes on this machine.
 - **[DEPLOY.md](DEPLOY.md)** — hosting the production stack at agentpredictmma.com.
+- **[DEV-VS-PROD.md](DEV-VS-PROD.md)** — the isolated dev stack, the deploy
+  gate, and how a change travels from editor to live site.
 
 ## Production build-out (2026-07-08)
 

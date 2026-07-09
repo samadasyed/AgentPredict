@@ -14,14 +14,14 @@ RUNTIME := $(shell command -v podman >/dev/null 2>&1 && echo podman || echo dock
 
 .DEFAULT_GOAL := help
 
-.PHONY: help demo up down logs watch build test test-py clean
+.PHONY: help demo up deploy down down-prod logs watch build test test-py clean
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 	@if [ -z "$(COMPOSE)" ]; then echo "  (no compose tool detected — run/down use raw podman via scripts/)"; fi
 
-demo:  ## Run the WHOLE stack on synthetic data — no API keys (dashboard: http://localhost:5173)
+demo:  ## DEV stack on synthetic data — no API keys, never touches prod (http://localhost:5173)
 	@[ -f .env ] || cp .env.example .env
 	@if [ -n "$(COMPOSE)" ]; then \
 	  echo ">> $(COMPOSE) $(MOCK) up --build"; \
@@ -31,7 +31,7 @@ demo:  ## Run the WHOLE stack on synthetic data — no API keys (dashboard: http
 	  scripts/run-stack.sh mock; \
 	fi
 
-up:  ## Run the stack against REAL APIs (requires a populated .env — see `make help`)
+up:  ## DEV stack against REAL APIs (requires .env) — never touches prod
 	@[ -f .env ] || { echo "ERROR: create .env from .env.example and add your API keys"; exit 1; }
 	@if [ -n "$(COMPOSE)" ]; then \
 	  echo ">> $(COMPOSE) up --build"; \
@@ -41,8 +41,14 @@ up:  ## Run the stack against REAL APIs (requires a populated .env — see `make
 	  scripts/run-stack.sh real; \
 	fi
 
-down:  ## Stop and remove all containers
-	@if [ -n "$(COMPOSE)" ]; then $(COMPOSE) $(MOCK) down; else scripts/stop-stack.sh; fi
+deploy:  ## Promote the CURRENT COMMIT to production (guardrailed — see scripts/deploy.sh)
+	@scripts/deploy.sh
+
+down:  ## Stop the DEV stack (production keeps running)
+	@if [ -n "$(COMPOSE)" ]; then $(COMPOSE) $(MOCK) down; else scripts/stop-stack.sh dev; fi
+
+down-prod:  ## Stop PRODUCTION (confirmation-gated)
+	@scripts/stop-stack.sh prod
 
 logs:  ## Tail logs from all services (compose) or print podman hint
 	@if [ -n "$(COMPOSE)" ]; then $(COMPOSE) logs -f; \

@@ -7,18 +7,25 @@ with networking works**, so everything builds and runs in containers.
 ## Run the stack
 
 ```bash
+# DEV stack (apdev-*, isolated from prod — safe to run anytime):
 scripts/run-stack.sh mock          # synthetic demo data, no API keys
-scripts/run-stack.sh real          # real APIs, needs populated .env (dev dashboard)
-scripts/run-stack.sh prod          # real APIs + production dashboard (nginx :8080,
-                                   #   single origin, gateway internal) — see DEPLOY.md
-scripts/stop-stack.sh              # tear down containers + network
+scripts/run-stack.sh real          # real APIs, needs populated .env
+scripts/stop-stack.sh              # tears down DEV only
+
+# PRODUCTION (ap-*, agentpredictmma.com) — via the deploy gate:
+scripts/deploy.sh                  # build :prod from the current COMMIT + swap + verify
+scripts/stop-stack.sh prod         # confirmation-gated
 ```
+
+Dev and prod are fully isolated (names, networks, image tags, ports) — see
+**[DEV-VS-PROD.md](DEV-VS-PROD.md)** for the workflow.
 
 (`make demo` / `make up` / `make down` wrap the same scripts when no compose tool
 exists, which is the case here. `RUNTIME=podman` is auto-detected.)
 
-- Containers: `ap-engine ap-gateway ap-rag ap-pm ap-mma ap-dash` on network
-  `agentpredict_net`. Logs: `podman logs -f ap-<name>`.
+- Containers: DEV `apdev-*` on `agentpredict_dev_net`; PROD `ap-*` (incl.
+  `ap-tunnel`) on `agentpredict_net`. Logs: `podman logs -f apdev-<name>` /
+  `ap-<name>`.
 - Dashboard: `http://localhost:5173` · Gateway health: `http://localhost:8000/health`
 - From Samad's laptop (server has no browser):
   `ssh -N -L 5173:localhost:5173 -L 8000:localhost:8000 <user>@<server>`
@@ -42,6 +49,9 @@ podman build -t agentpredict-rag:dev     -f rag/Dockerfile     .
 # dashboard — its own context
 podman build -t agentpredict-dashboard:dev -f dashboard/Dockerfile.dev ./dashboard
 ```
+
+(Those are the DEV tags. Never hand-build `:prod` tags — `scripts/deploy.sh`
+owns them, so prod always corresponds to a git commit.)
 
 Then `scripts/stop-stack.sh && scripts/run-stack.sh <mode>`, and run
 `podman image prune -f` afterwards — the 15G disk fills with orphaned layers
