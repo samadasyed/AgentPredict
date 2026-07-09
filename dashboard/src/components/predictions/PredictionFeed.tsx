@@ -20,7 +20,9 @@ export function PredictionFeed({ predictions }: PredictionFeedProps) {
       </div>
       <div className="max-h-[32rem] space-y-3 overflow-y-auto p-3">
         {predictions.length === 0 ? (
-          <p className="px-1 py-6 text-center text-sm italic text-slate-600">Waiting for analysis…</p>
+          <p className="px-1 py-6 text-center text-sm italic text-slate-600">
+            AI analysis appears when a fight's odds make a real move.
+          </p>
         ) : (
           predictions.map((pred) => (
             <PredictionCard key={`${pred.trigger_event_id}-${pred.timestamp}`} prediction={pred} />

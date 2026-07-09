@@ -21,7 +21,12 @@ RUN npm run build          # emits static site to /app/dist
 # ── Stage 2: serve ────────────────────────────────────────────────────────────
 FROM nginx:1.27-alpine
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Templated config: the image's stock 15-local-resolvers.envsh (activated by
+# the env below) exports NGINX_LOCAL_RESOLVERS from /etc/resolv.conf, then
+# envsubst renders the template — so nginx re-resolves `gateway` per-request
+# instead of caching one IP at startup (a recreated gateway 502'd the site).
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80

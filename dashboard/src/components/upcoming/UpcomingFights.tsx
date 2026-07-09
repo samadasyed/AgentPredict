@@ -8,6 +8,7 @@
  */
 
 import type { UpcomingFight } from '../../lib/fights'
+import { segmentRank } from '../../lib/fights'
 import { parseFighters, formatCountdown, formatSpan } from '../../lib/marketSeries'
 import { ProbabilityChart } from '../featured/ProbabilityChart'
 
@@ -64,7 +65,9 @@ function FightCard({ f }: { f: UpcomingFight }) {
 }
 
 /** Group fights by card (UFC 329, UFC Fight Night, …), preserving soonest-first
- * order. Fights with no known card land in a trailing "More scheduled" group. */
+ * card order. Within a card, show the card in billing order — Main Card first,
+ * then Prelims, then Early Prelims — and biggest market first within a segment.
+ * Fights with no known card land in a trailing "More scheduled" group. */
 function groupByCard(fights: UpcomingFight[]): [string, UpcomingFight[]][] {
   const groups = new Map<string, UpcomingFight[]>()
   for (const f of fights) {
@@ -76,6 +79,13 @@ function groupByCard(fights: UpcomingFight[]): [string, UpcomingFight[]][] {
   const entries = [...groups.entries()]
   // Known cards in first-seen (soonest) order; the untitled bucket last.
   entries.sort((a, b) => (a[0] === '' ? 1 : 0) - (b[0] === '' ? 1 : 0))
+  for (const entry of entries) {
+    entry[1] = [...entry[1]].sort(
+      (a, b) =>
+        segmentRank(a.market?.fightInfo) - segmentRank(b.market?.fightInfo) ||
+        (b.market?.volume ?? 0) - (a.market?.volume ?? 0),
+    )
+  }
   return entries
 }
 

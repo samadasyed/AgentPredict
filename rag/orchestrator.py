@@ -201,6 +201,13 @@ class Orchestrator:
         self._cycle_task: asyncio.Task | None = None
         # trigger key → monotonic time of last completed cycle.
         self._last_cycle_at: dict[str, float] = {}
+        # market_id → probability at the last explanation (or first sighting).
+        # Pre-event lines drift a fraction of a point per tick — no single tick
+        # crosses the threshold, but the CUMULATIVE move does. Triggering on
+        # |current − ref| lets slow drifts earn an explanation too; the ref
+        # resets only when a cycle actually runs, so skipped triggers (busy /
+        # cooldown) keep accumulating instead of being forgotten.
+        self._ref_prob: dict[str, float] = {}
         # Sliding-hour upsert budget.
         self._upsert_times: list[float] = []
 
@@ -252,10 +259,28 @@ class Orchestrator:
             finally:
                 await channel.close()
 
+    def _market_trigger(self, event: "events_pb2.CanonicalEvent"):
+        """Cumulative-drift gate for market events.
+
+        Returns a trigger event whose delta is the move since the last
+        explanation (None if the move is still below threshold). The reference
+        seeds at first sight as the pre-move price, so a big single tick
+        triggers immediately, while a slow pre-event drift triggers once its
+        total crosses the same threshold."""
+        m = event.market_event
+        ref = self._ref_prob.setdefault(m.market_id, m.probability - m.delta)
+        cum = m.probability - ref
+        if abs(cum) < _MEANINGFUL_DELTA_THRESHOLD:
+            return None
+        if abs(cum - m.delta) < 1e-12:
+            return event  # per-tick delta IS the cumulative move
+        trigger = events_pb2.CanonicalEvent()
+        trigger.CopyFrom(event)
+        trigger.market_event.delta = cum
+        return trigger
+
     def _should_run_cycle(self, event: "events_pb2.CanonicalEvent") -> bool:
-        """Cost gate: meaningful + not busy + market off cooldown."""
-        if not _is_meaningful(event):
-            return False
+        """Cost gate: not busy + trigger key off cooldown."""
         if self._cycle_task is not None and not self._cycle_task.done():
             logger.debug("[orchestrator] cycle busy — skipping %s", event.event_id)
             return False
@@ -279,14 +304,23 @@ class Orchestrator:
         # Always add to context window
         self._context_builder.add(event)
 
-        if not self._should_run_cycle(event):
+        # Meaningfulness: market events pass the cumulative-drift gate (the
+        # trigger's delta becomes the total move since last explanation);
+        # fight events pass unless they're schedule sentinels.
+        if event.HasField("market_event"):
+            trigger = self._market_trigger(event)
+        elif event.HasField("fight_event") and _is_meaningful(event):
+            trigger = event
+        else:
+            trigger = None
+        if trigger is None or not self._should_run_cycle(trigger):
             return
 
         logger.debug("[orchestrator] meaningful event %s — running RAG", event.event_id)
         # Fire-and-forget: the stream consumer keeps draining (context stays
         # fresh) while the blocking SDK calls run in a worker thread. The task
         # reference is the single-flight guard checked by _should_run_cycle.
-        self._cycle_task = asyncio.create_task(self._cycle_wrapper(event))
+        self._cycle_task = asyncio.create_task(self._cycle_wrapper(trigger))
 
     async def _cycle_wrapper(self, event: "events_pb2.CanonicalEvent") -> None:
         try:
@@ -297,6 +331,10 @@ class Orchestrator:
             logger.exception("[orchestrator] RAG cycle failed for %s: %s", event.event_id, exc)
         finally:
             self._last_cycle_at[_trigger_key(event)] = time.monotonic()
+            if event.HasField("market_event"):
+                # Drift accumulates from the price we just explained.
+                m = event.market_event
+                self._ref_prob[m.market_id] = m.probability
 
     def _run_cycle(self, event: "events_pb2.CanonicalEvent") -> "events_pb2.RagPrediction | None":
         """One full RAG cycle (blocking; called via to_thread)."""
