@@ -2,8 +2,8 @@
 
 Written 2026-07-08 (updated same day for the production build-out). This directory
 is the **current-state** snapshot of the project — everything needed to pick the
-work back up. (The older `agentdocs/` are the original June-3 skeleton specs and
-are stale; trust these files where they disagree.)
+work back up. (`agentdocs/` holds per-component reference docs, `humandocs/`
+the narrative overview — both current as of 2026-07-09.)
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — how the system fits together, the data
   contracts, and the non-obvious constraints that shaped the design.
@@ -60,7 +60,7 @@ of strikes/takedowns/knockdowns.
   decides when to push).
 - **The stack is RUNNING in REAL mode**: dashboard on `localhost:5173`, gateway
   on `localhost:8000`. From a laptop:
-  `ssh -N -L 5173:localhost:5173 -L 8000:localhost:8000 samad@100.91.26.104`
+  `ssh -N -L 5173:localhost:5173 -L 8000:localhost:8000 <user>@<server>`
 - **Test baseline (all green):** 47 C++ engine tests, 109 Python tests
   (agents + rag + gateway), 42 dashboard vitest tests, `tsc` clean.
 - **Verified live against real APIs (2026-07-08):** 27 Polymarket fight markets

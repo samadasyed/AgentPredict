@@ -1,1 +1,24 @@
-Claude, you will be creating a web-based dashboard that displays live UFC data and makes plain text predictions on why Polymarket’s odds changed in real time. The target audience of the project are polymarket retail traders watching the UFC event. Your agent docs include a diagram of the architecture behind the project, what technologies to use, and requirements and restrictions. We want to use the polymarket api for the polymarket data, the balldon’tlie api for live UFC statistics, and agentic RAG to put it all together and make predictions. If you have questions on what technology to use or what is required for each section. Please ask.
+# AgentPredict — Component Docs Index
+
+Per-component reference for people (or agents) modifying the code. Current as
+of 2026-07-09. For narrative orientation read `humandocs/ProjectOverview.md`;
+for ops read `handoff/`.
+
+| Doc | Component |
+|---|---|
+| [DiagramOfTheProject.md](DiagramOfTheProject.md) | Data-flow diagram |
+| [AgentAgents.md](AgentAgents.md) | `agents/` — Polymarket + MMA pollers |
+| [AgentEngine.md](AgentEngine.md) | `engine/` — C++ validation + ring buffer |
+| [AgentRag.md](AgentRag.md) | `rag/` — trigger policy, Gemini, Pinecone, verifier |
+| [Dashboard.md](Dashboard.md) | `dashboard/` — React SPA + gateway WebSocket |
+| [PolymarketAPI.md](PolymarketAPI.md) | External API notes: Gamma + CLOB |
+| [BalldontlieMMAAPI.md](BalldontlieMMAAPI.md) | External API notes: BallDontLie MMA |
+| [RequirementsAndRestrictions.md](RequirementsAndRestrictions.md) | Invariants you must not break |
+
+Ground rules for any change:
+- `proto/events.proto` is the single contract; changes ripple to checked-in
+  Python stubs, the engine's build-time C++ stubs, and the TS mirror types.
+- Every service has an offline mock so `make demo` works with zero keys —
+  keep mocks shaped exactly like the real clients.
+- All suites green before commit: C++ (GTest), Python (pytest), dashboard
+  (vitest + tsc). Commands in `handoff/RUNBOOK.md`.
