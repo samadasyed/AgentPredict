@@ -117,6 +117,11 @@ def _origin_allowed(ws: WebSocket) -> bool:
     if not _ALLOWED_ORIGINS:
         return True
     origin = (ws.headers.get("origin") or "").rstrip("/").lower()
+    # No Origin header = not a browser (curl, probes, watch scripts). The check
+    # exists to stop CROSS-SITE BROWSER pages; non-browser clients could fake
+    # any origin anyway, so rejecting them adds nothing and breaks tooling.
+    if not origin:
+        return True
     return origin in _ALLOWED_ORIGINS
 
 

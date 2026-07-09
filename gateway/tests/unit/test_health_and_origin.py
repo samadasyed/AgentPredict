@@ -98,9 +98,11 @@ def test_origin_enforced_when_allowlist_set(monkeypatch):
     trailing = MagicMock(); trailing.headers = {"origin": "https://agentpredictmma.com/"}
     upper = MagicMock(); upper.headers = {"origin": "HTTPS://AGENTPREDICTMMA.COM"}
     bad = MagicMock(); bad.headers = {"origin": "https://evil.example"}
+    # No Origin = non-browser client (curl, probes) — allowed; the check only
+    # defends against cross-site BROWSER pages, which always send Origin.
     missing = MagicMock(); missing.headers = {}
     assert server._origin_allowed(good) is True
     assert server._origin_allowed(trailing) is True
     assert server._origin_allowed(upper) is True
     assert server._origin_allowed(bad) is False
-    assert server._origin_allowed(missing) is False
+    assert server._origin_allowed(missing) is True
