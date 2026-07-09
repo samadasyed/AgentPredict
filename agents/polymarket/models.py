@@ -36,6 +36,7 @@ class Market(BaseModel):
     card_title: str = ""   # the card, e.g. "UFC 329" / "UFC Fight Night"
     fight_info: str = ""   # e.g. "Welterweight · Main Card"
     volume: float = 0.0    # event volume (USDC) — proxy for fight prominence
+    event_slug: str = ""   # Polymarket event slug → polymarket.com/event/<slug>
 
     @field_validator("tokens")
     @classmethod
@@ -75,3 +76,4 @@ class PriceSnapshot(BaseModel):
     card_title: str = ""
     fight_info: str = ""
     volume: float = 0.0
+    event_slug: str = ""

@@ -1,4 +1,9 @@
-# AgentPredict dashboard — production nginx site.
+# AgentPredict dashboard — production nginx site (TEMPLATE).
+#
+# Rendered by the stock nginx image's envsubst entrypoint into
+# /etc/nginx/conf.d/default.conf. ${NGINX_LOCAL_RESOLVERS} is exported by the
+# image's own 15-local-resolvers.envsh (activated via
+# NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1) from the container's /etc/resolv.conf.
 #
 # Serves the static Vite build and proxies the data plane to the gateway
 # container, so the browser only ever talks to ONE origin:
@@ -6,17 +11,19 @@
 #   /ws          → gateway WebSocket (upgrade headers required)
 #   /health      → gateway health (also handy for external uptime checks)
 #
-# TLS terminates in FRONT of this (host nginx/Caddy/Traefik or the cloud LB
-# for agentpredictmma.com) — this server only speaks plain HTTP on :80.
-
-# The gateway address is resolved at container start on the compose network.
-upstream gateway {
-    server gateway:8000;
-}
+# The gateway address is deliberately a VARIABLE: nginx then re-resolves it
+# per-request (respecting `valid=`) instead of caching the IP once at startup.
+# With a static upstream, recreating the gateway container (new IP) left nginx
+# proxying to the old IP — the whole public site 502'd until nginx restarted.
+#
+# TLS terminates in FRONT of this (Cloudflare Tunnel / host proxy / LB) —
+# this server only speaks plain HTTP on :80.
 
 server {
     listen 80;
     server_name _;
+
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=off;
 
     root /usr/share/nginx/html;
     index index.html;
@@ -33,7 +40,8 @@ server {
     }
 
     location /ws {
-        proxy_pass http://gateway;
+        set $gateway_upstream gateway:8000;
+        proxy_pass http://$gateway_upstream;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -46,7 +54,8 @@ server {
     }
 
     location /health {
-        proxy_pass http://gateway;
+        set $gateway_upstream gateway:8000;
+        proxy_pass http://$gateway_upstream;
         proxy_set_header Host $host;
     }
 }

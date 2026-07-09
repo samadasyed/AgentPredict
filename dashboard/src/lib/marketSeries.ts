@@ -34,10 +34,15 @@ export interface MarketSeries {
   cardTitle: string       // "UFC 329" etc.; '' unknown
   fightInfo: string       // "Welterweight · Main Card"; '' unknown
   volume: number          // market volume; 0 unknown
+  eventSlug: string       // Polymarket event slug; '' unknown
 }
 
 /** Display matchup for a series — the fight title when known, else the outcome. */
 export const matchupFor = (s: MarketSeries): string => s.title || s.outcome
+
+/** Link to this fight's page on Polymarket, or null when the slug is unknown. */
+export const polymarketUrl = (s: MarketSeries | null | undefined): string | null =>
+  s?.eventSlug ? `https://polymarket.com/event/${encodeURIComponent(s.eventSlug)}` : null
 
 const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v ?? 0)) || 0
 
@@ -78,6 +83,7 @@ export function buildMarketSeries(events: CanonicalEvent[]): MarketSeries[] {
     let cardTitle = ''
     let fightInfo = ''
     let volume = 0
+    let eventSlug = ''
     for (const m of arr) {
       points.push(m.probability)
       if (m.phase) phaseStr = m.phase
@@ -86,6 +92,7 @@ export function buildMarketSeries(events: CanonicalEvent[]): MarketSeries[] {
       if (m.title) title = m.title
       if (m.card_title) cardTitle = m.card_title
       if (m.fight_info) fightInfo = m.fight_info
+      if (m.event_slug) eventSlug = m.event_slug
       const vol = num(m.volume)
       if (vol) volume = vol
     }
@@ -103,6 +110,7 @@ export function buildMarketSeries(events: CanonicalEvent[]): MarketSeries[] {
       cardTitle,
       fightInfo,
       volume,
+      eventSlug,
     })
   }
   return series

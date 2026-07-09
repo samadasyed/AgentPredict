@@ -161,6 +161,45 @@ async def test_failed_verification_not_broadcast(orchestrator_with_mocks):
 
 
 @pytest.mark.asyncio
+async def test_slow_drift_accumulates_to_a_trigger(orchestrator_with_mocks):
+    """Pre-event lines move a fraction of a point per tick. No single tick is
+    meaningful, but once the CUMULATIVE move crosses the threshold, one
+    explanation fires — with the total move as its delta."""
+    orch = orchestrator_with_mocks
+    # Four ticks of +0.5pt each: 0.650 → 0.665 (ref seeds at 0.645).
+    for i, p in enumerate((0.650, 0.655, 0.660, 0.665)):
+        ev = _market_event(delta=0.005, probability=p)
+        await _handle_and_settle(orch, ev)
+        if i < 3:
+            orch._inference.explain.assert_not_called()
+    assert orch._inference.explain.call_count == 1
+    trigger = orch._inference.explain.call_args[0][0]
+    assert abs(trigger.market_event.delta - 0.02) < 1e-9   # cumulative, not 0.005
+
+
+@pytest.mark.asyncio
+async def test_drift_ref_resets_after_explanation(orchestrator_with_mocks):
+    orch = orchestrator_with_mocks
+    await _handle_and_settle(orch, _market_event(delta=0.05, probability=0.65))
+    assert orch._inference.explain.call_count == 1
+    # Ref is now 0.65 — a small wiggle around it must NOT re-trigger,
+    # even after the cooldown expires.
+    orch._last_cycle_at.clear()
+    await _handle_and_settle(orch, _market_event(delta=0.005, probability=0.655))
+    assert orch._inference.explain.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_baseline_events_seed_but_never_trigger(orchestrator_with_mocks):
+    """The agent re-emits delta-0 baselines every ~2min for visibility —
+    a flat line must not generate predictions."""
+    orch = orchestrator_with_mocks
+    for _ in range(5):
+        await _handle_and_settle(orch, _market_event(delta=0.0, probability=0.65))
+    orch._inference.explain.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_upsert_budget_caps_writes(orchestrator_with_mocks):
     orch = orchestrator_with_mocks
     with patch("rag.orchestrator._MAX_UPSERTS_PER_HOUR", 2):

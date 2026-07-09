@@ -39,6 +39,7 @@ message MarketEvent {
   string card_title = 10;  // the card it's on, e.g. "UFC 329" or "UFC Fight Night"
   string fight_info = 11;  // extra context, e.g. "Welterweight · Main Card"
   double volume     = 12;  // market volume (USDC) — proxy for fight prominence
+  string event_slug = 13;  // Polymarket event slug → polymarket.com/event/<slug>
 }
 
 message FightStatEvent {

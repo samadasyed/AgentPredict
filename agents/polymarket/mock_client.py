@@ -113,6 +113,7 @@ class MockPolymarketClient:
             card_title=card,
             fight_info=" · ".join(part.strip() for part in info.split(",")),
             volume=vol,
+            event_slug=cid.removeprefix("0x"),
         )
 
     async def get_markets(self, active_only: bool = True) -> list[Market]:
@@ -143,6 +144,7 @@ class MockPolymarketClient:
                     card_title=m.card_title,
                     fight_info=m.fight_info,
                     volume=m.volume,
+                    event_slug=m.event_slug,
                 )
             )
         return snaps

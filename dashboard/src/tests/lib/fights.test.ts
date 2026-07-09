@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { CanonicalEvent, MarketEvent, FightStatEvent } from '../../types/events'
 import { buildMarketSeries } from '../../lib/marketSeries'
-import { buildUpcomingFights } from '../../lib/fights'
+import { buildUpcomingFights, segmentRank } from '../../lib/fights'
 
 let seq = 0
 const now = Date.now()
@@ -103,5 +103,15 @@ describe('buildUpcomingFights', () => {
     const co = cards.find((c) => c.id === 'mkt:mkt-329-co')!
     expect(co.matchup).toBe('Paddy Pimblett vs. Benoît Saint Denis')
     expect(co.cardTitle).toBe('UFC 329')
+  })
+})
+
+describe('segmentRank', () => {
+  it('orders Main Card before Prelims before Early Prelims', () => {
+    expect(segmentRank('Welterweight · Main Card')).toBe(0)
+    expect(segmentRank('Lightweight · Prelims')).toBe(1)
+    expect(segmentRank('Bantamweight · Early Prelims')).toBe(2)  // not confused with "Prelims"
+    expect(segmentRank('Heavyweight')).toBe(3)
+    expect(segmentRank(undefined)).toBe(3)
   })
 })

@@ -10,6 +10,7 @@ import {
   findFightForOutcome,
   formatCountdown,
   matchupFor,
+  polymarketUrl,
 } from '../../lib/marketSeries'
 
 let seq = 0
@@ -59,7 +60,8 @@ describe('buildMarketSeries', () => {
     const events = newestFirst([
       market({ market_id: 'm3', probability: 0.66, outcome: 'Max Holloway',
                title: 'Max Holloway vs. Conor McGregor', card_title: 'UFC 329',
-               fight_info: 'Welterweight · Main Card', volume: 1_464_663 }),
+               fight_info: 'Welterweight · Main Card', volume: 1_464_663,
+               event_slug: 'ufc-max1-con-2026-07-11' }),
       market({ market_id: 'm3', probability: 0.68 }),   // partial tick, no metadata
     ])
     const [s] = buildMarketSeries(events)
@@ -68,6 +70,17 @@ describe('buildMarketSeries', () => {
     expect(s.fightInfo).toBe('Welterweight · Main Card')
     expect(s.volume).toBe(1_464_663)
     expect(matchupFor(s)).toBe('Max Holloway vs. Conor McGregor')
+    expect(polymarketUrl(s)).toBe('https://polymarket.com/event/ufc-max1-con-2026-07-11')
+  })
+
+  it('polymarketUrl is null without a slug and escapes junk slugs', () => {
+    const [plain] = buildMarketSeries(newestFirst([market({ market_id: 'm4', probability: 0.5 })]))
+    expect(polymarketUrl(plain)).toBeNull()
+    expect(polymarketUrl(null)).toBeNull()
+    const [weird] = buildMarketSeries(newestFirst([
+      market({ market_id: 'm5', probability: 0.5, event_slug: 'a/b?c' }),
+    ]))
+    expect(polymarketUrl(weird)).toBe('https://polymarket.com/event/a%2Fb%3Fc')
   })
 })
 

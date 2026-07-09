@@ -107,6 +107,17 @@ $RUNTIME run -d --name ap-mma     --network "$NET" \
 if [ "$MODE" = "prod" ]; then
   $RUNTIME run -d --name ap-dash  --network "$NET" \
     -p 8080:80 "$DASH_PROD" >/dev/null
+
+  # Publish via Cloudflare Tunnel when a token is configured (.env,
+  # CLOUDFLARE_TUNNEL_TOKEN=...). The connector dials OUT to Cloudflare and
+  # forwards agentpredictmma.com → ap-dash:80 — no inbound ports needed.
+  TUNNEL_TOKEN=$(grep '^CLOUDFLARE_TUNNEL_TOKEN=' .env 2>/dev/null | cut -d= -f2-)
+  if [ -n "$TUNNEL_TOKEN" ]; then
+    $RUNTIME run -d --name ap-tunnel --network "$NET" \
+      -e TUNNEL_TOKEN="$TUNNEL_TOKEN" \
+      docker.io/cloudflare/cloudflared:latest tunnel --no-autoupdate run >/dev/null
+    TUNNEL_UP=1
+  fi
 else
   $RUNTIME run -d --name ap-dash  --network "$NET" -p 5173:5173 \
     -e VITE_GATEWAY_WS_URL=ws://localhost:8000/ws "$DASH" >/dev/null
@@ -116,7 +127,11 @@ echo
 echo "AgentPredict ($MODE) is up:"
 if [ "$MODE" = "prod" ]; then
   echo "  site      → http://localhost:8080   (serves SPA + /ws + /health)"
-  echo "  TLS       → point your reverse proxy / LB at :8080 (handoff/DEPLOY.md)"
+  if [ "${TUNNEL_UP:-0}" = "1" ]; then
+    echo "  public    → Cloudflare Tunnel connector running (ap-tunnel) → https://agentpredictmma.com"
+  else
+    echo "  public    → no CLOUDFLARE_TUNNEL_TOKEN in .env — tunnel not started (handoff/DEPLOY.md)"
+  fi
 else
   echo "  dashboard → http://localhost:5173"
   echo "  gateway   → http://localhost:8000/health"

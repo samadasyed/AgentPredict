@@ -26,6 +26,17 @@ export interface UpcomingFight {
   market: MarketSeries | null // odds/history when a market exists
 }
 
+/** Card running order: Main Card opens the show visually, then Prelims, then
+ * Early Prelims. Parsed from fight_info ("Welterweight · Main Card"). Check
+ * "early" first — "Early Prelims" contains "Prelims". */
+export function segmentRank(fightInfo: string | undefined): number {
+  const s = (fightInfo ?? '').toLowerCase()
+  if (s.includes('main card') || s.includes('main event')) return 0
+  if (s.includes('early prelim')) return 2
+  if (s.includes('prelim')) return 1
+  return 3 // unknown segment sinks below known ones
+}
+
 /** Surnames (>3 chars) shared between two matchup/outcome strings → same fight. */
 function sameMatchup(a: string, b: string): boolean {
   const tokens = (s: string) =>
