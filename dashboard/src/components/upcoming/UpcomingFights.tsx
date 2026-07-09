@@ -9,8 +9,9 @@
 
 import type { UpcomingFight } from '../../lib/fights'
 import { segmentRank } from '../../lib/fights'
-import { parseFighters, formatCountdown, formatSpan } from '../../lib/marketSeries'
+import { parseFighters, formatCountdown, formatSpan, polymarketUrl } from '../../lib/marketSeries'
 import { ProbabilityChart } from '../featured/ProbabilityChart'
+import { PolymarketLink } from '../shared/PolymarketLink'
 
 function FightCard({ f }: { f: UpcomingFight }) {
   const m = f.market
@@ -51,8 +52,9 @@ function FightCard({ f }: { f: UpcomingFight }) {
           <div className="mt-2 h-12">
             <ProbabilityChart points={m.points} up={up} height={48} />
           </div>
-          <span className="mt-1 text-[11px] uppercase tracking-widest text-slate-600">
+          <span className="mt-1 flex items-center justify-between text-[11px] uppercase tracking-widest text-slate-600">
             {m.historyStart > 0 ? `odds · last ${formatSpan(m.historyStart)}` : 'odds trend'}
+            <PolymarketLink url={polymarketUrl(m)} className="normal-case tracking-normal" />
           </span>
         </>
       ) : (

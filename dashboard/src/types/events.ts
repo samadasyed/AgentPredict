@@ -24,6 +24,7 @@ export interface MarketEvent {
   card_title?: string           // the card, e.g. "UFC 329" / "UFC Fight Night"
   fight_info?: string           // e.g. "Welterweight · Main Card"
   volume?: number               // market volume (USDC) — fight prominence proxy
+  event_slug?: string           // Polymarket event slug → polymarket.com/event/<slug>
 }
 
 export interface FightStatEvent {

@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0c\x65vents.proto\x12\x0c\x61gentpredict\":\n\x10ProbabilityPoint\x12\x11\n\ttimestamp\x18\x01 \x01(\x03\x12\x13\n\x0bprobability\x18\x02 \x01(\x01\"\x84\x02\n\x0bMarketEvent\x12\x11\n\tmarket_id\x18\x01 \x01(\t\x12\x0f\n\x07outcome\x18\x02 \x01(\t\x12\x13\n\x0bprobability\x18\x03 \x01(\x01\x12\r\n\x05\x64\x65lta\x18\x04 \x01(\x01\x12\x11\n\ttimestamp\x18\x05 \x01(\x03\x12/\n\x07history\x18\x06 \x03(\x0b\x32\x1e.agentpredict.ProbabilityPoint\x12\x13\n\x0b\x65vent_start\x18\x07 \x01(\x03\x12\r\n\x05phase\x18\x08 \x01(\t\x12\r\n\x05title\x18\t \x01(\t\x12\x12\n\ncard_title\x18\n \x01(\t\x12\x12\n\nfight_info\x18\x0b \x01(\t\x12\x0e\n\x06volume\x18\x0c \x01(\x01\"\xa0\x01\n\x0e\x46ightStatEvent\x12\x10\n\x08\x66ight_id\x18\x01 \x01(\t\x12\x14\n\x0c\x66ighter_name\x18\x02 \x01(\t\x12\x11\n\tstat_type\x18\x03 \x01(\t\x12\r\n\x05value\x18\x04 \x01(\x01\x12\r\n\x05round\x18\x05 \x01(\x05\x12\x11\n\ttimestamp\x18\x06 \x01(\x03\x12\x13\n\x0b\x65vent_start\x18\x07 \x01(\x03\x12\r\n\x05phase\x18\x08 \x01(\t\"\xd5\x01\n\x0e\x43\x61nonicalEvent\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\x12)\n\x06source\x18\x02 \x01(\x0e\x32\x19.agentpredict.EventSource\x12\x13\n\x0bingested_at\x18\x03 \x01(\x03\x12\x31\n\x0cmarket_event\x18\x04 \x01(\x0b\x32\x19.agentpredict.MarketEventH\x00\x12\x33\n\x0b\x66ight_event\x18\x05 \x01(\x0b\x32\x1c.agentpredict.FightStatEventH\x00\x42\t\n\x07payload\"?\n\x0c\x45videnceItem\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x12\n\nsource_ref\x18\x02 \x01(\t\x12\r\n\x05score\x18\x03 \x01(\x01\"\x93\x01\n\rRagPrediction\x12\x13\n\x0b\x65xplanation\x18\x01 \x01(\t\x12,\n\x08\x65vidence\x18\x02 \x03(\x0b\x32\x1a.agentpredict.EvidenceItem\x12\x12\n\nconfidence\x18\x03 \x01(\x01\x12\x11\n\ttimestamp\x18\x04 \x01(\x03\x12\x18\n\x10trigger_event_id\x18\x05 \x01(\t\"?\n\tIngestAck\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\x12\x10\n\x08\x61\x63\x63\x65pted\x18\x02 \x01(\x08\x12\x0e\n\x06reason\x18\x03 \x01(\t\"T\n\x10SubscribeRequest\x12\x0e\n\x06\x63ursor\x18\x01 \x01(\t\x12\x30\n\rsource_filter\x18\x02 \x01(\x0e\x32\x19.agentpredict.EventSource\"-\n\x13RagSubscribeRequest\x12\x16\n\x0emin_confidence\x18\x01 \x01(\x01*H\n\x0b\x45ventSource\x12\x12\n\x0eSOURCE_UNKNOWN\x10\x00\x12\x15\n\x11SOURCE_POLYMARKET\x10\x01\x12\x0e\n\nSOURCE_MMA\x10\x02\x32\x9f\x01\n\x0e\x45ventIngestion\x12\x44\n\x0bIngestEvent\x12\x1c.agentpredict.CanonicalEvent\x1a\x17.agentpredict.IngestAck\x12G\n\x0cIngestStream\x12\x1c.agentpredict.CanonicalEvent\x1a\x17.agentpredict.IngestAck(\x01\x32Z\n\x0b\x45ventStream\x12K\n\tSubscribe\x12\x1e.agentpredict.SubscribeRequest\x1a\x1c.agentpredict.CanonicalEvent0\x01\x32\x65\n\tRagStream\x12X\n\x14SubscribePredictions\x12!.agentpredict.RagSubscribeRequest\x1a\x1b.agentpredict.RagPrediction0\x01\x42,Z*github.com/agentpredict/proto;agentpredictb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0c\x65vents.proto\x12\x0c\x61gentpredict\":\n\x10ProbabilityPoint\x12\x11\n\ttimestamp\x18\x01 \x01(\x03\x12\x13\n\x0bprobability\x18\x02 \x01(\x01\"\x98\x02\n\x0bMarketEvent\x12\x11\n\tmarket_id\x18\x01 \x01(\t\x12\x0f\n\x07outcome\x18\x02 \x01(\t\x12\x13\n\x0bprobability\x18\x03 \x01(\x01\x12\r\n\x05\x64\x65lta\x18\x04 \x01(\x01\x12\x11\n\ttimestamp\x18\x05 \x01(\x03\x12/\n\x07history\x18\x06 \x03(\x0b\x32\x1e.agentpredict.ProbabilityPoint\x12\x13\n\x0b\x65vent_start\x18\x07 \x01(\x03\x12\r\n\x05phase\x18\x08 \x01(\t\x12\r\n\x05title\x18\t \x01(\t\x12\x12\n\ncard_title\x18\n \x01(\t\x12\x12\n\nfight_info\x18\x0b \x01(\t\x12\x0e\n\x06volume\x18\x0c \x01(\x01\x12\x12\n\nevent_slug\x18\r \x01(\t\"\xa0\x01\n\x0e\x46ightStatEvent\x12\x10\n\x08\x66ight_id\x18\x01 \x01(\t\x12\x14\n\x0c\x66ighter_name\x18\x02 \x01(\t\x12\x11\n\tstat_type\x18\x03 \x01(\t\x12\r\n\x05value\x18\x04 \x01(\x01\x12\r\n\x05round\x18\x05 \x01(\x05\x12\x11\n\ttimestamp\x18\x06 \x01(\x03\x12\x13\n\x0b\x65vent_start\x18\x07 \x01(\x03\x12\r\n\x05phase\x18\x08 \x01(\t\"\xd5\x01\n\x0e\x43\x61nonicalEvent\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\x12)\n\x06source\x18\x02 \x01(\x0e\x32\x19.agentpredict.EventSource\x12\x13\n\x0bingested_at\x18\x03 \x01(\x03\x12\x31\n\x0cmarket_event\x18\x04 \x01(\x0b\x32\x19.agentpredict.MarketEventH\x00\x12\x33\n\x0b\x66ight_event\x18\x05 \x01(\x0b\x32\x1c.agentpredict.FightStatEventH\x00\x42\t\n\x07payload\"?\n\x0c\x45videnceItem\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x12\n\nsource_ref\x18\x02 \x01(\t\x12\r\n\x05score\x18\x03 \x01(\x01\"\x93\x01\n\rRagPrediction\x12\x13\n\x0b\x65xplanation\x18\x01 \x01(\t\x12,\n\x08\x65vidence\x18\x02 \x03(\x0b\x32\x1a.agentpredict.EvidenceItem\x12\x12\n\nconfidence\x18\x03 \x01(\x01\x12\x11\n\ttimestamp\x18\x04 \x01(\x03\x12\x18\n\x10trigger_event_id\x18\x05 \x01(\t\"?\n\tIngestAck\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\x12\x10\n\x08\x61\x63\x63\x65pted\x18\x02 \x01(\x08\x12\x0e\n\x06reason\x18\x03 \x01(\t\"T\n\x10SubscribeRequest\x12\x0e\n\x06\x63ursor\x18\x01 \x01(\t\x12\x30\n\rsource_filter\x18\x02 \x01(\x0e\x32\x19.agentpredict.EventSource\"-\n\x13RagSubscribeRequest\x12\x16\n\x0emin_confidence\x18\x01 \x01(\x01*H\n\x0b\x45ventSource\x12\x12\n\x0eSOURCE_UNKNOWN\x10\x00\x12\x15\n\x11SOURCE_POLYMARKET\x10\x01\x12\x0e\n\nSOURCE_MMA\x10\x02\x32\x9f\x01\n\x0e\x45ventIngestion\x12\x44\n\x0bIngestEvent\x12\x1c.agentpredict.CanonicalEvent\x1a\x17.agentpredict.IngestAck\x12G\n\x0cIngestStream\x12\x1c.agentpredict.CanonicalEvent\x1a\x17.agentpredict.IngestAck(\x01\x32Z\n\x0b\x45ventStream\x12K\n\tSubscribe\x12\x1e.agentpredict.SubscribeRequest\x1a\x1c.agentpredict.CanonicalEvent0\x01\x32\x65\n\tRagStream\x12X\n\x14SubscribePredictions\x12!.agentpredict.RagSubscribeRequest\x1a\x1b.agentpredict.RagPrediction0\x01\x42,Z*github.com/agentpredict/proto;agentpredictb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -22,30 +22,30 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'events_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z*github.com/agentpredict/proto;agentpredict'
-  _globals['_EVENTSOURCE']._serialized_start=1145
-  _globals['_EVENTSOURCE']._serialized_end=1217
+  _globals['_EVENTSOURCE']._serialized_start=1165
+  _globals['_EVENTSOURCE']._serialized_end=1237
   _globals['_PROBABILITYPOINT']._serialized_start=30
   _globals['_PROBABILITYPOINT']._serialized_end=88
   _globals['_MARKETEVENT']._serialized_start=91
-  _globals['_MARKETEVENT']._serialized_end=351
-  _globals['_FIGHTSTATEVENT']._serialized_start=354
-  _globals['_FIGHTSTATEVENT']._serialized_end=514
-  _globals['_CANONICALEVENT']._serialized_start=517
-  _globals['_CANONICALEVENT']._serialized_end=730
-  _globals['_EVIDENCEITEM']._serialized_start=732
-  _globals['_EVIDENCEITEM']._serialized_end=795
-  _globals['_RAGPREDICTION']._serialized_start=798
-  _globals['_RAGPREDICTION']._serialized_end=945
-  _globals['_INGESTACK']._serialized_start=947
-  _globals['_INGESTACK']._serialized_end=1010
-  _globals['_SUBSCRIBEREQUEST']._serialized_start=1012
-  _globals['_SUBSCRIBEREQUEST']._serialized_end=1096
-  _globals['_RAGSUBSCRIBEREQUEST']._serialized_start=1098
-  _globals['_RAGSUBSCRIBEREQUEST']._serialized_end=1143
-  _globals['_EVENTINGESTION']._serialized_start=1220
-  _globals['_EVENTINGESTION']._serialized_end=1379
-  _globals['_EVENTSTREAM']._serialized_start=1381
-  _globals['_EVENTSTREAM']._serialized_end=1471
-  _globals['_RAGSTREAM']._serialized_start=1473
-  _globals['_RAGSTREAM']._serialized_end=1574
+  _globals['_MARKETEVENT']._serialized_end=371
+  _globals['_FIGHTSTATEVENT']._serialized_start=374
+  _globals['_FIGHTSTATEVENT']._serialized_end=534
+  _globals['_CANONICALEVENT']._serialized_start=537
+  _globals['_CANONICALEVENT']._serialized_end=750
+  _globals['_EVIDENCEITEM']._serialized_start=752
+  _globals['_EVIDENCEITEM']._serialized_end=815
+  _globals['_RAGPREDICTION']._serialized_start=818
+  _globals['_RAGPREDICTION']._serialized_end=965
+  _globals['_INGESTACK']._serialized_start=967
+  _globals['_INGESTACK']._serialized_end=1030
+  _globals['_SUBSCRIBEREQUEST']._serialized_start=1032
+  _globals['_SUBSCRIBEREQUEST']._serialized_end=1116
+  _globals['_RAGSUBSCRIBEREQUEST']._serialized_start=1118
+  _globals['_RAGSUBSCRIBEREQUEST']._serialized_end=1163
+  _globals['_EVENTINGESTION']._serialized_start=1240
+  _globals['_EVENTINGESTION']._serialized_end=1399
+  _globals['_EVENTSTREAM']._serialized_start=1401
+  _globals['_EVENTSTREAM']._serialized_end=1491
+  _globals['_RAGSTREAM']._serialized_start=1493
+  _globals['_RAGSTREAM']._serialized_end=1594
 # @@protoc_insertion_point(module_scope)

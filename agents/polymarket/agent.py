@@ -64,6 +64,7 @@ def _build_market_event(snapshot: PriceSnapshot, delta: float) -> "events_pb2.Ca
     m.card_title = snapshot.card_title
     m.fight_info = snapshot.fight_info
     m.volume = snapshot.volume
+    m.event_slug = snapshot.event_slug
     # Ship the recent trajectory as a snapshot (see PriceSnapshot.history).
     for ts, prob in snapshot.history:
         point = m.history.add()

@@ -11,9 +11,10 @@
 
 import type { MarketSeries } from '../../lib/marketSeries'
 import type { LiveFight } from '../../lib/marketSeries'
-import { matchupFor, parseFighters, formatCountdown, formatSpan } from '../../lib/marketSeries'
+import { matchupFor, parseFighters, formatCountdown, formatSpan, polymarketUrl } from '../../lib/marketSeries'
 import { ProbabilityChart } from './ProbabilityChart'
 import { STAT_LABELS, formatStatValue } from '../live/statLabels'
+import { PolymarketLink } from '../shared/PolymarketLink'
 
 /** Surname-insensitive check that `name` refers to the same person as `fighter`. */
 const sameFighter = (name: string, fighter: string): boolean => {
@@ -141,7 +142,10 @@ export function FeaturedFight({ series, liveFight }: { series: MarketSeries; liv
         <div className="flex flex-col">
           <PhaseChip series={series} />
           <h2 className="mt-2 text-2xl font-semibold leading-snug text-white">{matchup}</h2>
-          {context && <p className="mt-1 text-sm text-slate-400">{context}</p>}
+          <p className="mt-1 flex items-center gap-3 text-sm text-slate-400">
+            {context && <span>{context}</span>}
+            <PolymarketLink url={polymarketUrl(series)} className="text-xs" />
+          </p>
 
           <div className="mt-auto pt-6">
             <div className="flex items-end gap-3">

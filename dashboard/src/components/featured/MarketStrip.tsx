@@ -4,8 +4,9 @@
  */
 
 import type { MarketSeries } from '../../lib/marketSeries'
-import { matchupFor } from '../../lib/marketSeries'
+import { matchupFor, polymarketUrl } from '../../lib/marketSeries'
 import { ProbabilityChart } from './ProbabilityChart'
+import { PolymarketLink } from '../shared/PolymarketLink'
 
 function MarketCard({ s }: { s: MarketSeries }) {
   const pct = (s.latest.probability * 100).toFixed(0)
@@ -24,6 +25,7 @@ function MarketCard({ s }: { s: MarketSeries }) {
       <div className="mt-2 h-10">
         <ProbabilityChart points={s.points} up={up} height={40} />
       </div>
+      <PolymarketLink url={polymarketUrl(s)} className="mt-1.5" />
     </div>
   )
 }

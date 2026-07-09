@@ -22,7 +22,7 @@ The stack is now a **final product** aimed at agentpredictmma.com:
   stale leftovers (started >12h ago, never closed) are dropped. UFC 329 (Jul 11,
   Holloway vs. McGregor 2 + 14 more fights) flows end-to-end with real odds and
   week-long price histories.
-- **Wire contract**: `MarketEvent` fields 9–12 = title/card_title/fight_info/volume;
+- **Wire contract**: `MarketEvent` fields 9–13 = title/card_title/fight_info/volume/event_slug;
   `outcome` is now ONE fighter's name (probability = that fighter's win prob);
   the matchup lives in `title`. The dashboard renders matchups, groups upcoming
   fights by card, and headlines the highest-volume market of the soonest card.

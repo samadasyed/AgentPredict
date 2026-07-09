@@ -204,6 +204,7 @@ def _parse_fight_event(ev: dict, now_ms: int) -> Market | None:
         phase=_phase_for(False, event_start_ms, now_ms),
         title=" ".join(m.group("matchup").split()),
         card_title=m.group("card").strip(),
+        event_slug=str(ev.get("slug") or ""),
         fight_info=" · ".join(part.strip() for part in info.split(",") if part.strip()),
         volume=volume,
     )
@@ -347,6 +348,7 @@ class PolymarketClient:
                 card_title=m.card_title,
                 fight_info=m.fight_info,
                 volume=m.volume,
+                event_slug=m.event_slug,
             ))
         return snapshots
 

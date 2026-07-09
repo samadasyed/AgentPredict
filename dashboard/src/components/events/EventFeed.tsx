@@ -4,6 +4,7 @@
 
 import type { CanonicalEvent } from '../../types/events'
 import { EventCard } from './EventCard'
+import { InfoHint } from '../shared/InfoHint'
 
 interface EventFeedProps {
   events: CanonicalEvent[]
@@ -18,7 +19,31 @@ export function EventFeed({ events: allEvents }: EventFeedProps) {
   return (
     <section className="flex flex-col rounded-2xl border border-white/5 bg-slate-900/40">
       <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">Live Events</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">Live Events</h2>
+          <InfoHint label="What is the Live Events feed?">
+            <p className="font-semibold text-slate-100">The raw, factual feed.</p>
+            <p className="mt-2">
+              Every event streams in here exactly as it arrives, with no interpretation:
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-4">
+              <li>
+                <span className="text-slate-100">Odds ticks</span> — a fight's implied win
+                probability on Polymarket changed. Each row shows the new probability and
+                the size of the move.
+              </li>
+              <li>
+                <span className="text-slate-100">Fight stats</span> — during live fights,
+                per-fighter numbers (significant strikes, takedowns, knockdowns, control
+                time) as they're recorded.
+              </li>
+            </ul>
+            <p className="mt-2 text-slate-400">
+              This is the evidence stream. The AI Predictions panel is where interpretation
+              happens — it works from exactly this data.
+            </p>
+          </InfoHint>
+        </div>
         <span className="rounded-full bg-white/5 px-2 py-0.5 text-xs font-mono text-slate-400">
           {events.length}
         </span>
