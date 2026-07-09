@@ -21,7 +21,7 @@ exists, which is the case here. `RUNTIME=podman` is auto-detected.)
   `agentpredict_net`. Logs: `podman logs -f ap-<name>`.
 - Dashboard: `http://localhost:5173` · Gateway health: `http://localhost:8000/health`
 - From Samad's laptop (server has no browser):
-  `ssh -N -L 5173:localhost:5173 -L 8000:localhost:8000 samad@100.91.26.104`
+  `ssh -N -L 5173:localhost:5173 -L 8000:localhost:8000 <user>@<server>`
 - Terminal-only stream watch (no browser): `make watch`
   (runs `scripts/watch-stream.py` against `ws://localhost:8000/ws`).
 - **The script only builds images that don't exist** (`build_if_missing`) — after

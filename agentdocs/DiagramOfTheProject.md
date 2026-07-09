@@ -1,34 +1,33 @@
-graph LR
-    subgraph "External Data Sources"
-        PM[Polymarket<br/>API]
-        MMA[MMA<br/>API]
-    end
+# Data-Flow Diagram
 
-    subgraph "High-Performance Backend (C++/Python)"
-        CE[Central<br/>Engine]
-        N[Normalize<br/>+ Validate]
-        ES[(Event<br/>Store)]
-        RAG[Agent / RAG<br/>Orchestrator]
-    end
+```
+Polymarket Gamma/CLOB        BallDontLie MMA
+      │  HTTPS polling             │  HTTPS polling
+      ▼                            ▼
+agents/polymarket            agents/mma
+      │   CanonicalEvent{MarketEvent}   │ CanonicalEvent{FightStatEvent}
+      └──────────────┬─────────────────┘
+                     ▼  gRPC EventIngestion (:50051)
+                engine (C++)
+        Normalizer → EventStore (ring buffer)
+                     │  gRPC EventStream.Subscribe
+        ┌────────────┴──────────────┐
+        ▼                           ▼
+   rag/orchestrator            gateway (FastAPI)
+   trigger → retrieve →             │
+   Gemini → verify                  │
+        │ gRPC RagStream (:50052)   │
+        └──────────► gateway ───────┤
+                                    ▼  WS /ws  {"type":"event"|"prediction"}
+                          dashboard (React) ── nginx (prod, :80)
+                                    ▲
+                     Cloudflare Tunnel / reverse proxy (prod)
+```
 
-    subgraph "AI & Vector Layer"
-        AI[AI<br/>Inference]
-        VS[Vector<br/>Store]
-    end
+Two independent streams reach the browser over one WebSocket:
+- **Stream 1 (factual)**: every validated market/fight event.
+- **Stream 2 (analysis)**: verified `RagPrediction`s.
 
-    subgraph "Frontend"
-        UI[Dashboard]
-    end
-
-    PM -->|Market<br/>Events| CE
-    MMA -->|Fight<br/>Stats| CE
-
-    CE -->|Raw<br/>Events| N
-    N -->|Canonical<br/>JSON| ES
-    N -->|Canonical<br/>JSON| RAG
-
-    RAG <-->|Model<br/>Inference| AI
-    RAG <-->|Pattern<br/>Retrieval| VS
-
-    CE -->|Streaming<br/>Updates| UI
-    RAG -->|Prediction<br/>+ Evidence| UI
+Phases (`upcoming|live|final`), odds history snapshots, and fight metadata all
+ride on Stream 1 events — the dashboard derives its entire UI from the stream
+(no REST endpoints besides `/health`).
