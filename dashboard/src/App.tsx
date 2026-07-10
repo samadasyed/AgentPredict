@@ -71,14 +71,14 @@ export default function App() {
           <LiveFightTracker fights={liveFights} updates={fightUpdates} />
         )}
 
-        <UpcomingFights fights={upcomingList} />
-
-        <MarketStrip series={movers} />
-
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <EventFeed events={events} />
           <PredictionFeed predictions={predictions} />
         </div>
+
+        <UpcomingFights fights={upcomingList} />
+
+        <MarketStrip series={movers} />
       </main>
     </div>
   )
