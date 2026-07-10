@@ -28,8 +28,12 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    # SPA fallback: unknown paths render the app shell.
+    # SPA fallback: unknown paths render the app shell. The shell must always
+    # revalidate — without this browsers heuristically cache index.html and
+    # keep serving the OLD asset bundle after a deploy (assets themselves are
+    # fingerprinted + immutable below, so revalidating the shell is cheap).
     location / {
+        add_header Cache-Control "no-cache";
         try_files $uri $uri/ /index.html;
     }
 
