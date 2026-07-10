@@ -7,13 +7,7 @@
 
 import type { UpcomingFight } from '../../lib/fights'
 import { parseFighters, formatCountdown } from '../../lib/marketSeries'
-
-function eventDate(ms: number): string {
-  if (!ms) return 'Date TBA'
-  return new Date(ms).toLocaleString(undefined, {
-    weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-  })
-}
+import { formatEventDate } from '../../lib/time'
 
 export function UpcomingFightHero({ fight }: { fight: UpcomingFight }) {
   const fighters = parseFighters(fight.matchup)
@@ -27,7 +21,7 @@ export function UpcomingFightHero({ fight }: { fight: UpcomingFight }) {
             isLive ? 'text-rose-400' : 'text-amber-400'
           }`}
         >
-          {isLive ? '● Live now' : 'Next up'} · {eventDate(fight.eventStart)}
+          {isLive ? '● Live now' : 'Next up'} · {formatEventDate(fight.eventStart)}
         </span>
 
         {fighters ? (
