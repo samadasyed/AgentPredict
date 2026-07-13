@@ -16,13 +16,12 @@ uvicorn[standard]==0.30.3
 websockets==12.0
 
 # ─── AI / RAG ─────────────────────────────────────────────────────────────────
-# google-generativeai 0.7.2 pinned google-ai-generativelanguage 0.6.6, which caps
-# protobuf <5.0 — irreconcilable with the protobuf==5.27.2 the generated gRPC stubs
-# and grpcio-tools require. 0.8.6 pulls generativelanguage 0.6.15 (protobuf <6), so
-# the whole graph resolves. `pinecone-client` is the deprecated package name (recent
-# releases are an import-time stub that errors); the current SDK is `pinecone`, which
-# still exposes `from pinecone import Pinecone, ServerlessSpec` as rag/ uses it.
-google-generativeai==0.8.6
+# google-genai is the current Gemini SDK (replaces the deprecated google-generativeai,
+# which fired a FutureWarning on every import and had protobuf-pin headaches).
+# `pinecone-client` is the deprecated package name (recent releases are an import-time
+# stub that errors); the current SDK is `pinecone`, which still exposes
+# `from pinecone import Pinecone, ServerlessSpec` as rag/ uses it.
+google-genai==2.11.0
 pinecone==9.0.1
 
 # ─── Testing ──────────────────────────────────────────────────────────────────

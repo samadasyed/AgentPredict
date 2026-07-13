@@ -1,5 +1,5 @@
 """
-Pinecone retriever with Gemini text-embedding-004 embeddings.
+Pinecone retriever with Gemini gemini-embedding-001 embeddings (google.genai SDK).
 
 Namespaces:
   - "market_events"  for Polymarket CanonicalEvents
@@ -15,17 +15,16 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 from pinecone import Pinecone, ServerlessSpec
 
 from agents.generated import events_pb2  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
 
-_PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
 _PINECONE_INDEX  = os.getenv("PINECONE_INDEX_NAME", "agentpredict")
-_GOOGLE_API_KEY  = os.getenv("GOOGLE_API_KEY", "")
-_EMBEDDING_MODEL = "models/gemini-embedding-001"
+_EMBEDDING_MODEL = "gemini-embedding-001"
 _EMBEDDING_DIM   = 768  # gemini-embedding-001 native dim is 3072; truncated via Matryoshka
 _TOP_K           = 5
 
@@ -59,14 +58,16 @@ class Retriever:
     """Pinecone-backed vector store for canonical events."""
 
     def __init__(self) -> None:
-        if not _PINECONE_API_KEY:
+        pinecone_api_key = os.getenv("PINECONE_API_KEY", "")
+        google_api_key = os.getenv("GOOGLE_API_KEY", "")
+        if not pinecone_api_key:
             raise EnvironmentError("PINECONE_API_KEY not set")
-        if not _GOOGLE_API_KEY:
+        if not google_api_key:
             raise EnvironmentError("GOOGLE_API_KEY not set")
 
-        genai.configure(api_key=_GOOGLE_API_KEY)
+        self._genai = genai.Client(api_key=google_api_key)
 
-        self._pc = Pinecone(api_key=_PINECONE_API_KEY)
+        self._pc = Pinecone(api_key=pinecone_api_key)
         self._index = self._get_or_create_index()
 
     def _get_or_create_index(self):
@@ -81,14 +82,16 @@ class Retriever:
             )
         return self._pc.Index(_PINECONE_INDEX)
 
-    def _embed(self, text: str, task_type: str = "retrieval_document") -> list[float]:
-        result = genai.embed_content(
+    def _embed(self, text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list[float]:
+        result = self._genai.models.embed_content(
             model=_EMBEDDING_MODEL,
-            content=text,
-            task_type=task_type,
-            output_dimensionality=_EMBEDDING_DIM,
+            contents=text,
+            config=genai_types.EmbedContentConfig(
+                task_type=task_type,
+                output_dimensionality=_EMBEDDING_DIM,
+            ),
         )
-        return result["embedding"]
+        return result.embeddings[0].values
 
     def upsert(self, event: "events_pb2.CanonicalEvent") -> None:
         """
@@ -125,7 +128,7 @@ class Retriever:
             List of EvidenceItem sorted by score descending.
         """
         # Asymmetric embedding model: queries and documents use different task types.
-        query_vector = self._embed(query_text, task_type="retrieval_query")
+        query_vector = self._embed(query_text, task_type="RETRIEVAL_QUERY")
         namespaces = [namespace] if namespace else ["market_events", "fight_events"]
 
         all_results: list[EvidenceItem] = []

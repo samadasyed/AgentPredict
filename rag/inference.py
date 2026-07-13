@@ -14,14 +14,14 @@ import os
 import re
 from dataclasses import dataclass
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 
 from rag.retriever import EvidenceItem
 from agents.generated import events_pb2  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
 
-_GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 _MODEL_NAME     = "gemini-2.5-flash"
 
 _SYSTEM_PROMPT = """\
@@ -71,13 +71,10 @@ class InferenceEngine:
     """Wraps Gemini Flash to generate grounded explanations."""
 
     def __init__(self) -> None:
-        if not _GOOGLE_API_KEY:
+        google_api_key = os.getenv("GOOGLE_API_KEY", "")
+        if not google_api_key:
             raise EnvironmentError("GOOGLE_API_KEY not set")
-        genai.configure(api_key=_GOOGLE_API_KEY)
-        self._model = genai.GenerativeModel(
-            model_name=_MODEL_NAME,
-            system_instruction=_SYSTEM_PROMPT,
-        )
+        self._client = genai.Client(api_key=google_api_key)
 
     def explain(
         self,
@@ -113,7 +110,13 @@ RETRIEVED EVIDENCE:
 
 Explain why the odds moved and assign a confidence score.
 """
-        response = self._model.generate_content(user_prompt)
+        response = self._client.models.generate_content(
+            model=_MODEL_NAME,
+            contents=user_prompt,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=_SYSTEM_PROMPT,
+            ),
+        )
         raw = _response_text(response)
 
         explanation, confidence = self._parse_response(raw)

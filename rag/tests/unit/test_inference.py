@@ -44,15 +44,14 @@ def _gemini_response(text: str) -> MagicMock:
 def inference():
     with patch("rag.inference.genai") as mock_genai, \
          patch.dict("os.environ", {"GOOGLE_API_KEY": "fake"}):
-        mock_model = MagicMock()
-        mock_genai.GenerativeModel.return_value = mock_model
+        # google.genai shape: client.models.generate_content(...)
+        mock_genai.Client.return_value = MagicMock()
         engine = InferenceEngine()
-        engine._model = mock_model
         yield engine
 
 
 def test_explain_returns_explanation_and_confidence(inference):
-    inference._model.generate_content.return_value = _gemini_response(
+    inference._client.models.generate_content.return_value = _gemini_response(
         "Odds moved because Fighter A landed a big combo.\nCONFIDENCE: 0.85"
     )
     result = inference.explain(_market_event(), "ctx", _evidence())
@@ -61,7 +60,7 @@ def test_explain_returns_explanation_and_confidence(inference):
 
 
 def test_explain_parses_confidence_from_last_line(inference):
-    inference._model.generate_content.return_value = _gemini_response(
+    inference._client.models.generate_content.return_value = _gemini_response(
         "Some explanation.\nAnother line.\nCONFIDENCE: 0.72"
     )
     result = inference.explain(_market_event(), "ctx", [])
@@ -76,7 +75,7 @@ def test_explain_percent_confidence_scaled_down():
 
 
 def test_explain_confidence_clipped_to_one(inference):
-    inference._model.generate_content.return_value = _gemini_response(
+    inference._client.models.generate_content.return_value = _gemini_response(
         "Great explanation.\nCONFIDENCE: 150"
     )
     result = inference.explain(_market_event(), "ctx", [])
@@ -84,7 +83,7 @@ def test_explain_confidence_clipped_to_one(inference):
 
 
 def test_explain_confidence_clipped_to_zero(inference):
-    inference._model.generate_content.return_value = _gemini_response(
+    inference._client.models.generate_content.return_value = _gemini_response(
         "Explanation.\nCONFIDENCE: -0.1"
     )
     result = inference.explain(_market_event(), "ctx", [])
@@ -92,7 +91,7 @@ def test_explain_confidence_clipped_to_zero(inference):
 
 
 def test_explain_missing_confidence_line_defaults_zero(inference):
-    inference._model.generate_content.return_value = _gemini_response(
+    inference._client.models.generate_content.return_value = _gemini_response(
         "Only explanation, no confidence line."
     )
     result = inference.explain(_market_event(), "ctx", [])
@@ -101,7 +100,7 @@ def test_explain_missing_confidence_line_defaults_zero(inference):
 
 def test_explain_raw_response_preserved(inference):
     raw = "Explanation text.\nCONFIDENCE: 0.6"
-    inference._model.generate_content.return_value = _gemini_response(raw)
+    inference._client.models.generate_content.return_value = _gemini_response(raw)
     result = inference.explain(_market_event(), "ctx", [])
     assert result.raw_response == raw
 
@@ -109,7 +108,7 @@ def test_explain_raw_response_preserved(inference):
 def test_explain_safety_block_raises_clean_error(inference):
     # No candidates (safety block / empty response) must raise RuntimeError,
     # not the SDK's ValueError from `response.text`.
-    inference._model.generate_content.return_value = MagicMock(
+    inference._client.models.generate_content.return_value = MagicMock(
         candidates=[], prompt_feedback="BLOCKED"
     )
     with pytest.raises(RuntimeError, match="no usable text"):

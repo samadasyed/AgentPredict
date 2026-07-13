@@ -33,7 +33,11 @@ def retriever():
 
         mock_pc.return_value.list_indexes.return_value = [MagicMock(name="agentpredict")]
         mock_pc.return_value.Index.return_value = MagicMock()
-        mock_genai.embed_content.return_value = {"embedding": [0.1] * 768}
+        # google.genai shape: client.models.embed_content(...).embeddings[0].values
+        mock_client = mock_genai.Client.return_value
+        mock_client.models.embed_content.return_value = MagicMock(
+            embeddings=[MagicMock(values=[0.1] * 768)]
+        )
 
         from rag.retriever import Retriever
         r = Retriever()
