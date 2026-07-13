@@ -137,3 +137,50 @@ async def test_emitted_event_has_correct_fields(agent, mock_client, mock_emitter
     assert ev.market_event.outcome == "Fighter A wins"
     assert abs(ev.market_event.probability - 0.80) < 1e-9
     assert ev.market_event.delta > 0
+
+
+# ─── Research flight recorder (RESEARCH/BETS.md B-001) ──────────────────────
+
+@pytest.mark.asyncio
+async def test_capture_records_held_ticks_and_history_once(
+    tmp_path, monkeypatch, mock_client, mock_emitter
+):
+    """With RESEARCH_CAPTURE=1 every snapshot is recorded each poll — including
+    sub-threshold ticks the emit gate discards — and a market's week-long
+    history is captured only on first sighting."""
+    import json
+
+    monkeypatch.setenv("RESEARCH_CAPTURE", "1")
+    monkeypatch.setenv("RESEARCH_CAPTURE_DIR", str(tmp_path))
+    agent = PolymarketAgent(client=mock_client, emitter=mock_emitter)
+
+    snap1 = _make_snapshot("mkt-1", "tok-1", "Fighter A wins", 0.65)
+    snap1.history = [(1000, 0.60), (2000, 0.65)]
+    mock_client.get_prices.return_value = [snap1]
+    await agent._poll_once()  # first sighting → baseline
+
+    snap2 = _make_snapshot("mkt-1", "tok-1", "Fighter A wins", 0.655)
+    snap2.history = [(1000, 0.60), (2000, 0.655)]
+    mock_client.get_prices.return_value = [snap2]
+    await agent._poll_once()  # +0.005 — below DELTA_THRESHOLD, normally invisible
+
+    files = list(tmp_path.rglob("polymarket_agent.jsonl"))
+    assert len(files) == 1
+    polls = [json.loads(l) for l in files[0].read_text().splitlines()]
+    assert [p["kind"] for p in polls] == ["poll", "poll"]
+
+    first, second = polls[0]["snapshots"][0], polls[1]["snapshots"][0]
+    assert first["action"] == "baseline" and first["delta"] is None
+    assert "history" in first  # week history captured on first sighting…
+    assert second["action"] == "held"  # …sub-threshold tick still recorded
+    assert abs(second["delta"] - 0.005) < 1e-9
+    assert "history" not in second  # …and history not duplicated
+
+
+@pytest.mark.asyncio
+async def test_capture_disabled_writes_nothing(tmp_path, monkeypatch, mock_client, mock_emitter):
+    monkeypatch.delenv("RESEARCH_CAPTURE", raising=False)
+    monkeypatch.setenv("RESEARCH_CAPTURE_DIR", str(tmp_path))
+    agent = PolymarketAgent(client=mock_client, emitter=mock_emitter)
+    await agent._poll_once()
+    assert list(tmp_path.rglob("*.jsonl")) == []

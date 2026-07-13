@@ -31,7 +31,9 @@ from queue import Queue, Empty
 from typing import Iterator
 
 import grpc
+from google.protobuf.json_format import MessageToDict
 
+from agents.shared.flight_recorder import FlightRecorder
 from rag.context_builder import ContextBuilder
 from rag.inference import InferenceEngine, describe_trigger
 from rag.retriever import Retriever
@@ -205,6 +207,9 @@ class Orchestrator:
         self._cycle_task: asyncio.Task | None = None
         # trigger key → monotonic time of last completed cycle.
         self._last_cycle_at: dict[str, float] = {}
+        # Research capture (RESEARCH_CAPTURE=1): full RAG cycle traces incl.
+        # verifier FAILs and cooldown/busy skips — the eval-harness dataset.
+        self._recorder = FlightRecorder("rag")
         # market_id → probability at the last explanation (or first sighting).
         # Pre-event lines drift a fraction of a point per tick — no single tick
         # crosses the threshold, but the CUMULATIVE move does. Triggering on
@@ -290,13 +295,23 @@ class Orchestrator:
         """Cost gate: not busy + trigger key off cooldown."""
         if self._cycle_task is not None and not self._cycle_task.done():
             logger.debug("[orchestrator] cycle busy — skipping %s", event.event_id)
+            self._record_skip("busy", event)
             return False
         key = _trigger_key(event)
         last = self._last_cycle_at.get(key, 0.0)
         if time.monotonic() - last < _MARKET_COOLDOWN_S:
             logger.debug("[orchestrator] %s on cooldown — skipping", key)
+            self._record_skip("cooldown", event)
             return False
         return True
+
+    def _record_skip(self, reason: str, event: "events_pb2.CanonicalEvent") -> None:
+        if self._recorder.enabled:
+            self._recorder.record("skip", {
+                "reason": reason,
+                "trigger_key": _trigger_key(event),
+                "trigger": MessageToDict(event, preserving_proto_field_name=True),
+            })
 
     def _upsert_budget_ok(self) -> bool:
         now = time.monotonic()
@@ -336,6 +351,12 @@ class Orchestrator:
                 self._rag_service.broadcast(prediction)
         except Exception as exc:
             logger.exception("[orchestrator] RAG cycle failed for %s: %s", event.event_id, exc)
+            if self._recorder.enabled:
+                self._recorder.record("cycle_error", {
+                    "trigger_key": _trigger_key(event),
+                    "trigger": MessageToDict(event, preserving_proto_field_name=True),
+                    "error": repr(exc),
+                })
         finally:
             self._last_cycle_at[_trigger_key(event)] = time.monotonic()
             if event.HasField("market_event"):
@@ -345,6 +366,8 @@ class Orchestrator:
 
     def _run_cycle(self, event: "events_pb2.CanonicalEvent") -> "events_pb2.RagPrediction | None":
         """One full RAG cycle (blocking; called via to_thread)."""
+        cycle_started = time.monotonic()
+
         # 1. Build context string
         context_text = self._context_builder.build_context()
 
@@ -355,7 +378,8 @@ class Orchestrator:
         evidence = self._retriever.retrieve(query_text=query)
 
         # 3. Upsert event for future retrieval (budgeted)
-        if self._upsert_budget_ok():
+        upserted = self._upsert_budget_ok()
+        if upserted:
             self._retriever.upsert(event)
         else:
             logger.warning("[orchestrator] hourly upsert budget spent — skipping upsert")
@@ -365,6 +389,24 @@ class Orchestrator:
 
         # 5. Verify — only predictions that PASS reach users
         verified = self._verifier.verify(result.explanation, result.confidence, event)
+
+        if self._recorder.enabled:
+            self._recorder.record("cycle", {
+                "trigger_key": _trigger_key(event),
+                "trigger": MessageToDict(event, preserving_proto_field_name=True),
+                "context_text": context_text,
+                "query": query,
+                "evidence": [{"text": e.text, "source_ref": e.source_ref, "score": e.score}
+                             for e in evidence],
+                "upserted": upserted,
+                "raw_explanation": result.explanation,
+                "raw_confidence": result.confidence,
+                "verified_explanation": verified.explanation,
+                "verified_confidence": verified.confidence,
+                "passed": verified.passed,
+                "latency_ms": int((time.monotonic() - cycle_started) * 1000),
+            })
+
         if not verified.passed:
             logger.info(
                 "[orchestrator] prediction for %s failed verification (confidence=%.3f) — not broadcast",

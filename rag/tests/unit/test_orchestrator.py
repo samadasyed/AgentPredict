@@ -285,3 +285,79 @@ def test_concurrent_register_unregister_broadcast_no_crash():
     for t in threads:
         t.join(timeout=2.0)
     assert not errors, f"thread errors: {errors}"
+
+
+# ─── Research flight recorder (RESEARCH/BETS.md B-001) ──────────────────────
+
+def _capture_orchestrator(tmp_path, monkeypatch):
+    """Orchestrator with all externals mocked and capture enabled."""
+    monkeypatch.setenv("RESEARCH_CAPTURE", "1")
+    monkeypatch.setenv("RESEARCH_CAPTURE_DIR", str(tmp_path))
+    with patch("rag.orchestrator.Retriever"), \
+         patch("rag.orchestrator.InferenceEngine"), \
+         patch("rag.orchestrator.Verifier"), \
+         patch("rag.orchestrator.ContextBuilder"):
+        orch = Orchestrator()
+    orch._retriever.retrieve.return_value = []
+    orch._retriever.upsert.return_value = None
+    orch._context_builder.build_context.return_value = "ctx"
+    orch._inference.explain.return_value = MagicMock(
+        explanation="Odds moved because of a big punch.", confidence=0.8)
+    orch._verifier.verify.return_value = MagicMock(
+        explanation="Odds moved because of a big punch.", confidence=0.8, passed=True)
+    orch._rag_service.broadcast = MagicMock()
+    return orch
+
+
+def _read_records(tmp_path):
+    import json
+    files = list(tmp_path.rglob("rag.jsonl"))
+    if not files:
+        return []
+    return [json.loads(l) for l in files[0].read_text().splitlines()]
+
+
+@pytest.mark.asyncio
+async def test_capture_records_full_cycle(tmp_path, monkeypatch):
+    orch = _capture_orchestrator(tmp_path, monkeypatch)
+    await _handle_and_settle(orch, _market_event(delta=0.05))
+
+    cycles = [r for r in _read_records(tmp_path) if r["kind"] == "cycle"]
+    assert len(cycles) == 1
+    c = cycles[0]
+    assert c["trigger_key"] == "mkt:mkt-abc"
+    assert c["context_text"] == "ctx"
+    assert c["raw_explanation"] == "Odds moved because of a big punch."
+    assert c["passed"] is True
+    assert c["upserted"] is True
+    assert "market_event" in c["trigger"]
+    assert isinstance(c["latency_ms"], int)
+
+
+@pytest.mark.asyncio
+async def test_capture_records_failed_verification(tmp_path, monkeypatch):
+    """Verifier FAILs are the eval harness's hard negatives — they must be
+    captured even though they are never broadcast."""
+    orch = _capture_orchestrator(tmp_path, monkeypatch)
+    orch._verifier.verify.return_value = MagicMock(
+        explanation="neutral fallback", confidence=0.3, passed=False)
+    await _handle_and_settle(orch, _market_event(delta=0.05))
+
+    cycles = [r for r in _read_records(tmp_path) if r["kind"] == "cycle"]
+    assert len(cycles) == 1
+    assert cycles[0]["passed"] is False
+    orch._rag_service.broadcast.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_capture_records_cooldown_skip(tmp_path, monkeypatch):
+    orch = _capture_orchestrator(tmp_path, monkeypatch)
+    await _handle_and_settle(orch, _market_event(delta=0.05, probability=0.65))
+    # Second meaningful move on the same market inside the cooldown window.
+    await _handle_and_settle(orch, _market_event(delta=0.05, probability=0.70))
+
+    records = _read_records(tmp_path)
+    skips = [r for r in records if r["kind"] == "skip"]
+    assert len(skips) == 1
+    assert skips[0]["reason"] == "cooldown"
+    assert skips[0]["trigger_key"] == "mkt:mkt-abc"

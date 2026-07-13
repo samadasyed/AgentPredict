@@ -28,3 +28,6 @@ __pycache__/
 *.pem
 *.key
 secrets/
+
+# Research flight-recorder captures (RESEARCH_CAPTURE=1) — data stays local
+research_capture/

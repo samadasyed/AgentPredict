@@ -5,7 +5,7 @@ Max 2–3 **active** bets at any time. Every bet carries: hypothesis, why we're 
 ## Active
 
 ### B-001 — Flight recorder: capture the correlation dataset
-- **Status:** active — proposed to saify (memo [2026-07-13-cycle1](memos/2026-07-13-cycle1-data-evaporation.md)); awaiting go-ahead for source edits
+- **Status:** active — **recorder built and shipped 2026-07-13** (saify approved). `FlightRecorder` in `agents/shared/flight_recorder.py`; taps in `agents/polymarket/agent.py` (every snapshot per poll incl. sub-threshold ticks, week history once per market) and `rag/orchestrator.py` (`cycle` incl. verifier FAILs, `skip` with reason, `cycle_error`). Enable with `RESEARCH_CAPTURE=1` before the next card lists. Next: first real capture → hand data to B-002.
 - **Hypothesis:** Persisting the full event-aligned data stream (5s price paths, week histories, fight events, every RAG cycle's inputs/outputs incl. failed verifications and skipped triggers) turns fight nights into an accreting proprietary dataset — the single prerequisite for the eval harness, latency research, and any future in-house model.
 - **Why us:** The data already flows through code in saify's lane (`agents/polymarket/agent.py`, `rag/orchestrator.py`); nobody else joins Polymarket microstructure with fight events + explanation traces. Capture windows are scarce (fight week only), so being running > being clever.
 - **Cheapest decisive experiment:** Env-gated (`RESEARCH_CAPTURE=1`) append-only JSONL taps at `_poll_once` and `_run_cycle`; verify in mock mode, then let it run through the next real card. ~1 day of work, ~25 MB/fight-night.

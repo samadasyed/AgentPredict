@@ -19,6 +19,7 @@ from typing import Dict, Tuple
 from agents.polymarket.client import PolymarketClient
 from agents.polymarket.models import PriceSnapshot
 from agents.shared.event_emitter import EventEmitter
+from agents.shared.flight_recorder import FlightRecorder
 from agents.generated import events_pb2  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,12 @@ class PolymarketAgent:
         self._price_cache: _PriceCache = {}
         # market_id → monotonic time of the last baseline emitted for it.
         self._baseline_at: Dict[str, float] = {}
+        # Research capture (RESEARCH_CAPTURE=1): every snapshot each poll —
+        # including sub-threshold ticks the emit gate below discards.
+        self._recorder = FlightRecorder("polymarket_agent")
+        # Markets whose week-long history has already been captured once
+        # (it barely changes poll-to-poll; re-recording it would be pure bloat).
+        self._history_captured: set[str] = set()
 
     async def run(self) -> None:
         """Main polling loop. Runs indefinitely; cancel via asyncio cancellation."""
@@ -122,16 +129,19 @@ class PolymarketAgent:
         snapshots = await self._client.get_prices([m.condition_id for m in selected])
 
         now = time.monotonic()
+        capture_rows: list[dict] = []
         for snap in snapshots:
             key = (snap.market_id, snap.token_id)
             prev = self._price_cache.get(key)
             delta = (snap.probability - prev.probability) if prev is not None else None
+            action = "held"
 
             if delta is not None and abs(delta) >= DELTA_THRESHOLD:
                 # A real move — emit it (also refreshes the market's visibility).
                 ev = _build_market_event(snap, delta)
                 accepted = self._emitter.emit(ev)
                 self._baseline_at[snap.market_id] = now
+                action = "emitted"
                 logger.debug(
                     "[polymarket-agent] emitted market=%s outcome=%s delta=%.4f accepted=%s",
                     snap.market_id, snap.outcome, delta, accepted,
@@ -144,10 +154,24 @@ class PolymarketAgent:
                 ev = _build_market_event(snap, 0.0)
                 self._emitter.emit(ev)
                 self._baseline_at[snap.market_id] = now
+                action = "baseline"
                 logger.debug("[polymarket-agent] baseline snapshot market=%s outcome=%s",
                              snap.market_id, snap.outcome)
 
+            if self._recorder.enabled:
+                row = snap.model_dump(exclude={"history"})
+                row["delta"] = delta
+                row["action"] = action
+                if snap.history and snap.market_id not in self._history_captured:
+                    row["history"] = snap.history
+                    self._history_captured.add(snap.market_id)
+                capture_rows.append(row)
+
             self._price_cache[key] = snap
+
+        if capture_rows:
+            self._recorder.record("poll", {"n_selected": len(selected),
+                                           "snapshots": capture_rows})
 
     async def close(self) -> None:
         await self._client.close()
