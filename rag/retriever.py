@@ -73,12 +73,19 @@ class Retriever:
     def _get_or_create_index(self):
         existing = [idx.name for idx in self._pc.list_indexes()]
         if _PINECONE_INDEX not in existing:
-            logger.info("[retriever] creating Pinecone index '%s'", _PINECONE_INDEX)
+            # Serverless placement only matters at creation time; env-tunable so
+            # deploys outside aws/us-east-1 don't need a code change.
+            cloud = os.getenv("PINECONE_CLOUD", "aws")
+            region = os.getenv("PINECONE_REGION", "us-east-1")
+            logger.info(
+                "[retriever] creating Pinecone index '%s' (%s/%s)",
+                _PINECONE_INDEX, cloud, region,
+            )
             self._pc.create_index(
                 name=_PINECONE_INDEX,
                 dimension=_EMBEDDING_DIM,
                 metric="cosine",
-                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+                spec=ServerlessSpec(cloud=cloud, region=region),
             )
         return self._pc.Index(_PINECONE_INDEX)
 

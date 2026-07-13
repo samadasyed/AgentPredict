@@ -91,3 +91,23 @@ def test_upsert_fight_event_uses_fight_namespace(retriever):
     retriever.upsert(ev)
     call_kwargs = retriever._index.upsert.call_args[1]
     assert call_kwargs["namespace"] == "fight_events"
+
+
+def test_index_creation_uses_env_cloud_and_region():
+    """PINECONE_CLOUD / PINECONE_REGION drive ServerlessSpec when the index is created."""
+    with patch("rag.retriever.Pinecone") as mock_pc, \
+         patch("rag.retriever.genai"), \
+         patch.dict("os.environ", {
+             "PINECONE_API_KEY": "fake",
+             "GOOGLE_API_KEY": "fake",
+             "PINECONE_CLOUD": "gcp",
+             "PINECONE_REGION": "europe-west4",
+         }):
+        mock_pc.return_value.list_indexes.return_value = []  # force creation path
+
+        from rag.retriever import Retriever
+        Retriever()
+
+        spec = mock_pc.return_value.create_index.call_args[1]["spec"]
+        assert spec.cloud == "gcp"
+        assert spec.region == "europe-west4"
