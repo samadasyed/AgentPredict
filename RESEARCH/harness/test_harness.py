@@ -86,3 +86,24 @@ def test_evaluate_separation_and_roundtrip(tmp_path):
     assert report["separation"] > 0.5
     assert report["latency_ms_p50"] == 1200
     assert report["outcomes"]["continued"] >= 1
+
+
+# ─── drift analyzer ──────────────────────────────────────────────────────────
+
+def test_drift_analyzer_thresholds_and_excursion():
+    from drift import analyze, _cum_triggers, _max_excursion
+
+    # Path: 0.50 → drifts up 0.002/tick ×5 (cum +0.01) → one -0.015 tick
+    probs = [0.50, 0.502, 0.504, 0.506, 0.508, 0.510, 0.495]
+    assert _cum_triggers(probs, 0.01) == 2       # +0.01 crossed, then -0.015
+    assert abs(_max_excursion(probs) - 0.015) < 1e-12
+
+    polls = [_poll("mkt-d", [(1_000_000 + i * 5000, p)])
+             for i, p in enumerate(probs)]
+    cap = Capture(polls=polls)
+    d = analyze(cap)[0]
+    assert d.n_ticks == 7
+    assert d.tick_emits[0.01] == 1               # only the -0.015 tick
+    assert d.tick_emits[0.002] == 6              # every move
+    assert d.cum_emits[0.01] == 2
+    assert abs(d.total_variation - 0.025) < 1e-9
