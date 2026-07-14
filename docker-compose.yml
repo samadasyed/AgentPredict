@@ -48,6 +48,9 @@ services:
       POLYMARKET_DELTA_THRESHOLD: "0.01"
     env_file:
       - .env
+    volumes:
+      # Research flight-recorder captures (RESEARCH_CAPTURE=1) persist on the host.
+      - ./research_capture:/app/research_capture
     networks:
       - backend
     depends_on:
@@ -86,6 +89,9 @@ services:
       RAG_GRPC_ADDRESS: "0.0.0.0:50052"
     env_file:
       - .env
+    volumes:
+      # Research flight-recorder captures (RESEARCH_CAPTURE=1) persist on the host.
+      - ./research_capture:/app/research_capture
     expose:
       - "50052"
     networks:

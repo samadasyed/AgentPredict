@@ -1,5 +1,7 @@
 # Proposal (for Samad): persist flight-recorder captures out of containers
 
+> **UPDATE 2026-07-14: applied on `saify` with saify's approval** (compose volumes for `polymarket-agent` + `rag`, `CAPTURE_VOL` in `run-stack.sh`). Nothing left to write — just merge `saify` (or cherry-pick) and set `RESEARCH_CAPTURE=1` in the prod `.env` before Jul 18. Original rationale below.
+
 **From:** saify · **Files touched:** `docker-compose.yml`, `scripts/run-stack.sh` — your ownership, so this is a proposal, not a commit.
 
 **Context:** B-001 (RESEARCH/BETS.md) added an env-gated flight recorder to the polymarket agent and RAG orchestrator (`RESEARCH_CAPTURE=1` in `.env`, already propagates via `env_file`/`--env-file`). It writes JSONL to `research_capture/` **inside the container filesystem** — which is destroyed on container removal, i.e., every deploy. Fight-night captures are the point, and they're unrecoverable if lost.

@@ -91,6 +91,11 @@ else
   MMA_EXTRA=(-e MMA_POLL_INTERVAL_S=6 -e BALLDONTLIE_GOAT_TIER=1)
 fi
 
+# Research flight-recorder captures (RESEARCH_CAPTURE=1 in .env) must land on
+# the host — the `rm -f` above wipes the container FS on every restart.
+mkdir -p research_capture
+CAPTURE_VOL=(-v "$PWD/research_capture:/app/research_capture")
+
 # Port exposure: DEV publishes engine gRPC (:50051), gateway (:8000) and the
 # Vite dashboard (:5173) for direct access + debugging. PROD keeps everything
 # internal except the nginx site (:8080) — the dashboard's nginx proxies /ws
@@ -110,7 +115,7 @@ $RUNTIME run -d --name $PREFIX-engine  --network "$NET" "${ENGINE_PORTS[@]}" \
   -e ENGINE_LOG_LEVEL=INFO -e ENGINE_RING_CAPACITY="${ENGINE_RING_CAPACITY:-16384}" \
   "$ENGINE" >/dev/null
 
-$RUNTIME run -d --name $PREFIX-rag     --network "$NET" \
+$RUNTIME run -d --name $PREFIX-rag     --network "$NET" "${CAPTURE_VOL[@]}" \
   "${DATA_ENV[@]}" -e ENGINE_GRPC_ADDRESS=$PREFIX-engine:50051 -e RAG_GRPC_ADDRESS=0.0.0.0:50052 \
   "$RAG" python -m rag.orchestrator >/dev/null
 
@@ -121,7 +126,7 @@ $RUNTIME run -d --name $PREFIX-gateway --network "$NET" --network-alias gateway 
   "${DATA_ENV[@]}" -e ENGINE_GRPC_ADDRESS=$PREFIX-engine:50051 -e RAG_GRPC_ADDRESS=$PREFIX-rag:50052 \
   "$GATEWAY" "${GATEWAY_CMD[@]}" >/dev/null
 
-$RUNTIME run -d --name $PREFIX-pm      --network "$NET" \
+$RUNTIME run -d --name $PREFIX-pm      --network "$NET" "${CAPTURE_VOL[@]}" \
   "${DATA_ENV[@]}" -e ENGINE_GRPC_ADDRESS=$PREFIX-engine:50051 "${PM_EXTRA[@]}" \
   "$AGENTS" python -m agents.polymarket.agent >/dev/null
 
