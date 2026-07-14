@@ -22,9 +22,17 @@ Max 2–3 **active** bets at any time. Every bet carries: hypothesis, why we're 
 - **If it ships, the product gains:** A regression gate for Stream 2 quality and the ability to claim (and prove) "measurably better than a human watching two screens."
 - **Evidence so far:** Tap-point feasibility confirmed in [2026-07-13-cycle1](memos/2026-07-13-cycle1-data-evaporation.md); no captures yet.
 
+### B-003 — CLOB websocket latency edge
+- **Status:** active — **promoted from backlog 2026-07-14** after a positive feasibility probe ([interim memo](memos/2026-07-14-interim-drift-and-ws-probe.md)): public WS, no auth, 62 real-time `price_change` events in 120s on 3 quiet markets where our poller emitted zero.
+- **Hypothesis:** A websocket feed gives material lead time (and order-book information) over 5s midpoint polling during live fights — better drift detection for Stream 1 and earlier RAG triggers for Stream 2.
+- **Why us:** We already capture the poll side; running both in parallel through a live card gives a paired comparison nobody else has for MMA markets.
+- **Cheapest decisive experiment:** WS side-recorder alongside the poll capture through the Jul 18 card; measure WS lead time on real moves + WS-only signal (book pressure before midpoint moves).
+- **Kill criterion:** No material lead over 5s polling on fight-night moves, or WS too unreliable (disconnects/gaps) to run unattended.
+- **If it ships, the product gains:** Sub-second move detection mid-fight — the "live" in live dashboard.
+
 ## Backlog (not active — do not work these yet)
 
-- **B-003 — CLOB websocket latency edge.** 5s polling vs markets that move in seconds mid-fight. First experiment: verify the public CLOB market websocket channel live during fight week and measure tick latency vs our poll. Sequenced behind B-001 — without captured price paths we can't quantify what the poll costs us.
+_Empty._
 
 ## Graveyard
 
