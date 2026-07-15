@@ -107,3 +107,66 @@ def test_drift_analyzer_thresholds_and_excursion():
     assert d.tick_emits[0.002] == 6              # every move
     assert d.cum_emits[0.01] == 2
     assert abs(d.total_variation - 0.025) < 1e-9
+
+
+# ─── lead-time analyzer ──────────────────────────────────────────────────────
+
+def test_leadtime_pairs_ws_and_poll(tmp_path):
+    import json as _json
+    from leadtime import analyze
+
+    day = tmp_path / "20260718"
+    day.mkdir()
+    tok = "tok-lead"
+    # Poll: 0.50 at t=10s, 0.52 at t=15s (change detected at 15s)
+    (day / "polymarket_agent.jsonl").write_text("\n".join(_json.dumps({
+        "kind": "poll", "ts_ms": t, "n_selected": 1,
+        "snapshots": [{"market_id": "m", "token_id": tok, "outcome": "X",
+                       "probability": p, "timestamp_ms": t, "action": "held",
+                       "delta": 0.0}]}) for t, p in
+        [(10_000, 0.50), (15_000, 0.52), (20_000, 0.52)]) + "\n")
+    # WS: midpoint 0.50 at 9s, moves to 0.52 at 12s (3s before poll detects),
+    # then a poll-invisible flicker at 17s that reverts by 18s.
+    def msg(recv, bb, ba):
+        return _json.dumps({"kind": "ws_msg", "ts_ms": recv, "recv_ms": recv,
+                            "event_type": "price_change", "asset_id": tok, "title": "",
+                            "payload": {"price_changes": [
+                                {"asset_id": tok, "best_bid": str(bb), "best_ask": str(ba)}]}})
+    (day / "clob_ws.jsonl").write_text("\n".join([
+        _json.dumps({"kind": "ws_connect", "ts_ms": 8000, "n_tokens": 1}),
+        msg(9_000, 0.49, 0.51), msg(12_000, 0.51, 0.53),
+        msg(17_000, 0.51, 0.55), msg(18_000, 0.51, 0.53),
+    ]) + "\n")
+
+    stats, rel = analyze(tmp_path)
+    s = stats[tok]
+    assert s.poll_changes == 1 and s.covered == 1
+    assert s.leads_ms == [3000]          # poll detected at 15s, WS moved at 12s
+    assert s.ws_moves == 3               # 9->12, 12->17, 17->18
+    assert s.ws_only == 2                # the 17s/18s flicker never reached a poll change
+    assert rel["connects"] == 1 and rel["msgs"] == 4
+
+
+def test_leadtime_ignores_poll_changes_outside_ws_window(tmp_path):
+    import json as _json
+    from leadtime import analyze
+
+    day = tmp_path / "20260718"
+    day.mkdir()
+    tok = "tok-window"
+    # Poll change happens at t=5s, but WS only starts at t=60s.
+    (day / "polymarket_agent.jsonl").write_text("\n".join(_json.dumps({
+        "kind": "poll", "ts_ms": t, "n_selected": 1,
+        "snapshots": [{"market_id": "m", "token_id": tok, "outcome": "X",
+                       "probability": p, "timestamp_ms": t, "action": "held",
+                       "delta": 0.0}]}) for t, p in
+        [(1_000, 0.50), (5_000, 0.60), (61_000, 0.60), (65_000, 0.60)]) + "\n")
+    (day / "clob_ws.jsonl").write_text(_json.dumps({
+        "kind": "ws_msg", "ts_ms": 60_000, "recv_ms": 60_000,
+        "event_type": "price_change", "asset_id": tok, "title": "",
+        "payload": {"price_changes": [
+            {"asset_id": tok, "best_bid": "0.59", "best_ask": "0.61"}]}}) + "\n")
+
+    stats, _ = analyze(tmp_path)
+    # The 5s change predates WS coverage — must not count as "uncovered".
+    assert tok not in stats or stats[tok].poll_changes == 0
