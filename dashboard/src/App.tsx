@@ -49,7 +49,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
-      <Header connected={connected} />
+      <Header />
 
       <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
         {!connected && (
