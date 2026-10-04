@@ -1,0 +1,9 @@
+# The dashboard image builds from this directory, so the root rules do not apply.
+node_modules/
+dist/
+.git/
+**/.env*
+!**/.env.example
+**/*.pem
+**/*.key
+**/secrets/

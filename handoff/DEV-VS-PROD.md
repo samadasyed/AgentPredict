@@ -96,8 +96,11 @@ git checkout <last-good-sha> && scripts/deploy.sh && git checkout -
 - **One small disk.** Builds are shared machinery — build serially and
   `podman image prune -f` after; a full disk takes down builds for both
   stacks (never the *running* site, but you can't deploy off a full disk).
-- **One machine.** A crashed host takes both stacks down. Prod restarts by
-  running `scripts/run-stack.sh prod --yes` (or a redeploy) after boot.
+- **One machine.** A crashed host takes both stacks down. Production containers
+  use `--restart=always` and return automatically after boot through the user's
+  `podman-restart.service`. Lingering starts that user service without a login.
+  `scripts/run-stack.sh prod` configures this before creating containers; dev
+  containers do not receive an automatic restart policy.
 
 ## Cheat sheet
 
