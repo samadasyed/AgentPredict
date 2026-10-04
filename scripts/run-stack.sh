@@ -23,6 +23,7 @@ cd "$(dirname "$0")/.."
 MODE="${1:-mock}"
 YES="${2:-}"
 RUNTIME="${RUNTIME:-}"
+RESTART_OPTIONS=()
 if [ -z "$RUNTIME" ]; then
   if command -v podman >/dev/null 2>&1; then RUNTIME=podman
   elif command -v docker >/dev/null 2>&1; then RUNTIME=docker
@@ -39,6 +40,7 @@ case "$MODE" in
     PREFIX=ap
     NET=agentpredict_net
     TAG=prod
+    RESTART_OPTIONS=(--restart=always)
     if [ "$YES" != "--yes" ]; then
       echo "⚠  This (re)starts the PRODUCTION stack behind agentpredictmma.com."
       echo "   Prefer scripts/deploy.sh, which builds :prod images from a clean"
@@ -50,6 +52,12 @@ case "$MODE" in
     ;;
   *) echo "usage: run-stack.sh {mock|real|prod} [--yes]"; exit 1;;
 esac
+
+# Rootless Podman needs a user service and lingering to restore containers at
+# boot. Configure this before replacing any production containers.
+if [ "$MODE" = "prod" ] && [ "$RUNTIME" = "podman" ]; then
+  bash scripts/enable-autostart.sh
+fi
 
 ENGINE=agentpredict-engine:$TAG
 GATEWAY=agentpredict-gateway:$TAG
@@ -106,31 +114,31 @@ if [ "$MODE" = "prod" ]; then
 fi
 
 echo ">> starting services"
-$RUNTIME run -d --name $PREFIX-engine  --network "$NET" "${ENGINE_PORTS[@]}" \
+$RUNTIME run -d "${RESTART_OPTIONS[@]}" --name $PREFIX-engine  --network "$NET" "${ENGINE_PORTS[@]}" \
   -e ENGINE_LOG_LEVEL=INFO -e ENGINE_RING_CAPACITY="${ENGINE_RING_CAPACITY:-16384}" \
   "$ENGINE" >/dev/null
 
-$RUNTIME run -d --name $PREFIX-rag     --network "$NET" \
+$RUNTIME run -d "${RESTART_OPTIONS[@]}" --name $PREFIX-rag     --network "$NET" \
   "${DATA_ENV[@]}" -e ENGINE_GRPC_ADDRESS=$PREFIX-engine:50051 -e RAG_GRPC_ADDRESS=0.0.0.0:50052 \
   "$RAG" python -m rag.orchestrator >/dev/null
 
 # --network-alias gateway: the prod dashboard's nginx resolves the upstream by
 # the name "gateway"; give the container that DNS name on its own network.
-$RUNTIME run -d --name $PREFIX-gateway --network "$NET" --network-alias gateway \
+$RUNTIME run -d "${RESTART_OPTIONS[@]}" --name $PREFIX-gateway --network "$NET" --network-alias gateway \
   "${GATEWAY_PORTS[@]}" \
   "${DATA_ENV[@]}" -e ENGINE_GRPC_ADDRESS=$PREFIX-engine:50051 -e RAG_GRPC_ADDRESS=$PREFIX-rag:50052 \
   "$GATEWAY" "${GATEWAY_CMD[@]}" >/dev/null
 
-$RUNTIME run -d --name $PREFIX-pm      --network "$NET" \
+$RUNTIME run -d "${RESTART_OPTIONS[@]}" --name $PREFIX-pm      --network "$NET" \
   "${DATA_ENV[@]}" -e ENGINE_GRPC_ADDRESS=$PREFIX-engine:50051 "${PM_EXTRA[@]}" \
   "$AGENTS" python -m agents.polymarket.agent >/dev/null
 
-$RUNTIME run -d --name $PREFIX-mma     --network "$NET" \
+$RUNTIME run -d "${RESTART_OPTIONS[@]}" --name $PREFIX-mma     --network "$NET" \
   "${DATA_ENV[@]}" -e ENGINE_GRPC_ADDRESS=$PREFIX-engine:50051 "${MMA_EXTRA[@]}" \
   "$AGENTS" python -m agents.mma.agent >/dev/null
 
 if [ "$MODE" = "prod" ]; then
-  $RUNTIME run -d --name $PREFIX-dash  --network "$NET" \
+  $RUNTIME run -d "${RESTART_OPTIONS[@]}" --name $PREFIX-dash  --network "$NET" \
     -p 8080:80 "$DASH_PROD" >/dev/null
 
   # Publish via Cloudflare Tunnel when a token is configured (.env,
@@ -138,7 +146,7 @@ if [ "$MODE" = "prod" ]; then
   # forwards agentpredictmma.com → ap-dash:80 — no inbound ports needed.
   TUNNEL_TOKEN=$(grep '^CLOUDFLARE_TUNNEL_TOKEN=' .env 2>/dev/null | cut -d= -f2-)
   if [ -n "$TUNNEL_TOKEN" ]; then
-    $RUNTIME run -d --name $PREFIX-tunnel --network "$NET" \
+    $RUNTIME run -d "${RESTART_OPTIONS[@]}" --name $PREFIX-tunnel --network "$NET" \
       -e TUNNEL_TOKEN="$TUNNEL_TOKEN" \
       docker.io/cloudflare/cloudflared:latest tunnel --no-autoupdate run >/dev/null
     TUNNEL_UP=1

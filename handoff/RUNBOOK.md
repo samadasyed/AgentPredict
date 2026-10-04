@@ -38,6 +38,34 @@ exists, which is the case here. `RUNTIME=podman` is auto-detected.)
   `GOOGLE_API_KEY`/`PINECONE_API_KEY` the rag container exits at startup (keys are
   read at module import).
 
+## Automatic production startup
+
+`scripts/run-stack.sh prod` gives all seven production containers, including
+the Cloudflare tunnel, `--restart=always`. Podman restarts unexpected exits.
+For rootless Podman, the launcher also runs `scripts/enable-autostart.sh` to
+enable user lingering and `podman-restart.service`, so the site returns after
+a server boot without an SSH login. The service waits for the host network
+and retries failed startup every 10 seconds.
+
+To configure an existing deployment without rebuilding or replacing it:
+
+```bash
+for container in ap-engine ap-rag ap-gateway ap-pm ap-mma ap-dash ap-tunnel; do
+  podman update --restart=always "$container"
+done
+bash scripts/enable-autostart.sh
+```
+
+Verify with `loginctl show-user "$USER" -p Linger`,
+`systemctl --user status podman-restart.service`, and
+`podman inspect ap-tunnel --format '{{.HostConfig.RestartPolicy.Name}}'`.
+Check public readiness with `curl -fsS https://agentpredictmma.com/health`.
+
+An intentional `podman stop` suppresses immediate restart; containers with
+`always` return at the next boot. `scripts/stop-stack.sh prod` removes the
+production containers, so they stay down until production is launched again.
+Host firmware or the hypervisor must also start the machine when power returns.
+
 ## Rebuild after code changes
 
 ```bash

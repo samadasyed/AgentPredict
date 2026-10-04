@@ -26,11 +26,11 @@ dashboard/dist/
 node_modules/
 
 # Secrets and local env
-.env
-.env.local
-.env.*.local
-*.pem
-*.key
+**/.env*
+!**/.env.example
+**/*.pem
+**/*.key
+**/secrets/
 
 # Editor / tooling
 .vscode/

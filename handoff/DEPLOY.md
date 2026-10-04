@@ -140,6 +140,11 @@ odds updating. The `www` variant should work identically.
 
 ## Operations
 
+- **Automatic recovery:** production containers use `--restart=always`.
+  Rootless Podman's `podman-restart.service` starts them after boot, with user
+  lingering enabled so no login is needed. The production launcher configures
+  this automatically; see [RUNBOOK.md](RUNBOOK.md#automatic-production-startup)
+  for applying it to existing containers and checking the setup.
 - **Bring the whole public site up/down:**
   `scripts/run-stack.sh prod` / `scripts/stop-stack.sh` — the tunnel connector
   is part of the stack now.
